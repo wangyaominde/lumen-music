@@ -48,6 +48,18 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
     reply.header('ETag', etag);
     reply.header('Cache-Control', 'private, no-cache, must-revalidate');
 
+    // When the browser cancels (track switched mid-load, user paused, etc.)
+    // we have to actively destroy the file read stream so its file descriptor
+    // and the underlying socket get released. Without this, rapid track
+    // switching piles up half-open streams and eventually the browser hits
+    // its 6-per-origin connection cap, freezing playback.
+    const attachAbortCleanup = (s: NodeJS.ReadableStream) => {
+      const onAbort = () => { (s as any).destroy?.(); };
+      req.raw.once('close', onAbort);
+      req.raw.once('aborted', onAbort);
+      return s;
+    };
+
     const range = req.headers.range;
     if (range) {
       const m = /bytes=(\d+)-(\d*)/.exec(range);
@@ -66,12 +78,12 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
         reply.header('Accept-Ranges', 'bytes');
         reply.header('Content-Length', chunkSize);
         reply.header('Content-Type', contentType);
-        return reply.send(createReadStream(track.path, { start, end }));
+        return reply.send(attachAbortCleanup(createReadStream(track.path, { start, end })));
       }
     }
     reply.header('Content-Length', total);
     reply.header('Accept-Ranges', 'bytes');
     reply.header('Content-Type', contentType);
-    return reply.send(createReadStream(track.path));
+    return reply.send(attachAbortCleanup(createReadStream(track.path)));
   });
 };

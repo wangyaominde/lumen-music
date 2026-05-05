@@ -107,10 +107,32 @@ function shuffled(n: number, except?: number): number[] {
   return arr;
 }
 
+// Tracks the most-recent track id we tried to play so stale `play()` promises
+// from rapid track-switching can be ignored when they finally resolve/reject.
+let loadGeneration = 0;
+
 function loadAndPlay(track: Track) {
   ensureAudioGraph();
+  const gen = ++loadGeneration;
+  // Tear down the previous load FIRST. Without this, rapid track switches
+  // can leave the prior fetch + media decoder in mid-teardown when we kick
+  // off the next one — after enough cycles the browser hits its 6-per-origin
+  // concurrent-connection cap and new tracks just stop loading.
+  try { audio.pause(); } catch { /* not in any state, fine */ }
+  // empty src + load() is the spec-defined "reset" sequence for an
+  // HTMLMediaElement; clears the network task and resource and keeps the
+  // element addressable.
+  audio.removeAttribute('src');
+  try { audio.load(); } catch { /* */ }
   audio.src = streamUrl(track.id);
-  audio.play().catch(() => {});
+  // Don't keep retrying on stale errors — only the latest load wins.
+  audio.play().catch((err) => {
+    if (gen !== loadGeneration) return; // a newer track is already underway
+    // AbortError shows up legitimately when the user paused before we got
+    // here; it's not actionable.
+    if ((err as DOMException)?.name === 'AbortError') return;
+    // Anything else: we'll surface via the audio element's own error event.
+  });
 }
 
 export const usePlayer = create<PlayerState>()(
