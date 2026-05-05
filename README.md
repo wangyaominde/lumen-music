@@ -4,15 +4,6 @@
 
 完整覆盖 **FLAC / ALAC / WAV / AIFF / DSF / DFF / APE / WavPack / MP3 / OGG / OPUS** 的浏览与流式播放。无需外部账号、无需 Docker，单二进制级别的部署体积（13 MB tar.gz）。
 
-![Now Playing](docs/screenshots/now-playing.jpg)
-
-| | |
-|:---:|:---:|
-| ![Login](docs/screenshots/login.jpg) | ![Home](docs/screenshots/home.jpg) |
-| 6 位 PIN 登录页 · 3D 数字粒子球背景 | 首页 · 一键刮削整库 · 最近添加 |
-| ![Album](docs/screenshots/album.jpg) | |
-| 专辑页 · 封面提取色调 · 刮削元数据 | |
-
 ---
 
 ## 功能
