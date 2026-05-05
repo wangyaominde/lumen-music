@@ -60,6 +60,81 @@ function normalizeName(s: string | undefined | null, fallback: string): string {
   return trimmed.length > 0 ? trimmed : fallback;
 }
 
+// --- mojibake detection + repair ---
+// Common case in Chinese music: ID3v2.3 frames marked as Latin-1 but actually
+// containing GBK/GB18030 bytes. music-metadata reads them as Latin-1, so we
+// see the raw bytes as codepoints 0x80-0xFF. Re-encoding to bytes + decoding
+// as GB18030 (or Big5 as a second guess) recovers the text.
+//
+// Vorbis comments (FLAC) are spec'd UTF-8; if a writer wrote GBK there, the
+// reader gets U+FFFD replacement chars and the original bytes are gone — we
+// can't recover that, scanner falls back to the filename for those.
+
+const REPLACEMENT_CHAR = '�';
+
+function looksMojibake(s: string | undefined | null): boolean {
+  if (!s) return false;
+  if (s.includes(REPLACEMENT_CHAR)) return true;
+  // Latin-1 supplement chars clustered together — typical when GBK bytes get
+  // misinterpreted as Latin-1. Plain English / accented Latin doesn't trip
+  // this because the cluster ratio threshold is high.
+  let supp = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0x80 && c <= 0xFF) supp++;
+  }
+  return supp >= 2 && supp / s.length > 0.4;
+}
+
+function tryDecodeAs(s: string, encoding: 'gb18030' | 'big5' | 'shift_jis'): string | null {
+  try {
+    const bytes = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      if (c > 0xFF) return null; // not raw bytes — give up
+      bytes[i] = c;
+    }
+    const out = new TextDecoder(encoding, { fatal: false }).decode(bytes);
+    if (out.includes(REPLACEMENT_CHAR)) return null;
+    // Require at least one CJK char to consider it a successful repair —
+    // otherwise we'd "fix" plain English into Chinese gibberish.
+    if (!/[一-鿿぀-ヿ가-힯]/.test(out)) return null;
+    return out;
+  } catch { return null; }
+}
+
+function repairText(s: string | undefined | null): string | null {
+  if (!s) return null;
+  if (!looksMojibake(s)) return s;
+  return (
+    tryDecodeAs(s, 'gb18030') ??
+    tryDecodeAs(s, 'big5') ??
+    tryDecodeAs(s, 'shift_jis') ??
+    null
+  );
+}
+
+/**
+ * Pick the best-available value for a tag field:
+ *   1. If raw tag is fine, use it.
+ *   2. If raw tag looks mojibake, try to repair via byte-level re-decode.
+ *   3. If unrepairable, use the path-derived hint.
+ *   4. Last resort: provided fallback.
+ */
+function pickField(rawTag: string | undefined | null, pathHint: string | undefined, fallback: string): string {
+  const trimmed = (rawTag ?? '').trim();
+  if (trimmed) {
+    if (!looksMojibake(trimmed)) return trimmed;
+    const repaired = repairText(trimmed);
+    if (repaired) return repaired.trim();
+    // unrepairable: drop through to path-hint
+  }
+  if (pathHint && pathHint.trim() && !looksMojibake(pathHint)) {
+    return pathHint.trim();
+  }
+  return fallback;
+}
+
 function upsertArtist(name: string): number {
   const existing = db.prepare('SELECT id FROM artists WHERE name = ?').get(name) as { id: number } | undefined;
   if (existing) return existing.id;
@@ -132,8 +207,15 @@ async function scanFile(file: string): Promise<'added' | 'updated' | 'unchanged'
   const stats = statSync(file);
   const mtime = Math.floor(stats.mtimeMs);
 
-  const existing = db.prepare('SELECT id, mtime FROM tracks WHERE path = ?').get(file) as { id: number; mtime: number } | undefined;
-  if (existing && existing.mtime === mtime) return 'unchanged';
+  const existing = db.prepare('SELECT id, mtime, file_size, title, artist_name, album_name FROM tracks WHERE path = ?').get(file) as
+    { id: number; mtime: number; file_size: number; title: string; artist_name: string; album_name: string } | undefined;
+  // Skip if BOTH mtime and size match — that catches `cp -p` style replacements
+  // that preserve mtime but change content / quality. If the existing record
+  // carries mojibake, re-process regardless so the repair logic gets a chance.
+  if (existing && existing.mtime === mtime && existing.file_size === stats.size) {
+    const stale = looksMojibake(existing.title) || looksMojibake(existing.artist_name) || looksMojibake(existing.album_name);
+    if (!stale) return 'unchanged';
+  }
 
   const metadata = await parseFile(file, { duration: true, skipCovers: false });
   const c = metadata.common;
@@ -141,10 +223,15 @@ async function scanFile(file: string): Promise<'added' | 'updated' | 'unchanged'
 
   const hints = parsePathHints(file);
   const titleFallback = hints.title || basename(file).replace(/\.[^.]+$/, '');
-  const title = normalizeName(c.title, titleFallback);
-  const artistName = normalizeName(c.artist ?? c.artists?.[0], hints.artist || 'Unknown Artist');
-  const albumArtist = normalizeName(c.albumartist, artistName);
-  const albumName = normalizeName(c.album, hints.album || 'Unknown Album');
+  const rawTitle = c.title ?? null;
+  const rawArtist = c.artist ?? c.artists?.[0] ?? null;
+  const rawAlbumArtist = c.albumartist ?? null;
+  const rawAlbum = c.album ?? null;
+
+  const title = pickField(rawTitle, hints.title, titleFallback);
+  const artistName = pickField(rawArtist, hints.artist, 'Unknown Artist');
+  const albumArtist = pickField(rawAlbumArtist, hints.artist, artistName);
+  const albumName = pickField(rawAlbum, hints.album, 'Unknown Album');
   const trackNo = c.track?.no ?? hints.track_no ?? null;
   const discNo = c.disk?.no ?? hints.disc_no ?? 1;
   const year = c.year ?? hints.year ?? null;

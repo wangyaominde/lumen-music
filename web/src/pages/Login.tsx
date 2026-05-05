@@ -86,6 +86,7 @@ function buildGlyphAtlas(dpr: number): Map<string, HTMLCanvasElement> {
 export function LoginPage() {
   const phase = useAuth(s => s.phase);
   const setPhase = useAuth(s => s.setPhase);
+  const setUser = useAuth(s => s.setUser);
   const isSetup = phase === 'setup';
 
   // Setup has two stages (set, then confirm); login has one.
@@ -374,13 +375,13 @@ export function LoginPage() {
     setBusy(true);
     setErr(null);
     try {
+      let result;
       if (isSetup) {
         if (setupStage === 'set') {
           setFirstPin(pin);
           setSetupStage('confirm');
           setDigits(Array(PIN_LENGTH).fill(''));
           setBusy(false);
-          // small bump for visual feedback
           bumpRotation();
           return;
         }
@@ -391,10 +392,11 @@ export function LoginPage() {
           setBusy(false);
           return;
         }
-        await api.authSetup(pin);
+        result = await api.authSetup(pin);
       } else {
-        await api.authLogin(pin);
+        result = await api.authLogin(pin);
       }
+      setUser(result.user);
       triggerExtract(pin);
       setTimeout(() => setPhase('authenticated'), 1500);
     } catch (e) {
@@ -405,11 +407,11 @@ export function LoginPage() {
   };
 
   const heading =
-    isSetup && setupStage === 'set'  ? '设置 PIN' :
+    isSetup && setupStage === 'set'  ? '设置管理员 PIN' :
     isSetup && setupStage === 'confirm' ? '再输一次确认' :
     '请输入 PIN';
   const subtitle =
-    isSetup && setupStage === 'set'  ? '首次访问，设置一个 6 位访问 PIN 来保护你的音乐库。' :
+    isSetup && setupStage === 'set'  ? '首次访问，设置一个 6 位 PIN，会成为管理员账号。之后可以在「设置」里为家人添加只听用户。' :
     isSetup && setupStage === 'confirm' ? '请再次输入相同的 PIN。' :
     '在混沌中找出隐藏的数字。';
 

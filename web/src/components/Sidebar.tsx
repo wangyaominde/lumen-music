@@ -26,6 +26,8 @@ const items = [
 
 export function Sidebar() {
   const setPhase = useAuth(s => s.setPhase);
+  const setUser = useAuth(s => s.setUser);
+  const user = useAuth(s => s.user);
   const clearQueue = usePlayer(s => s.clearQueue);
   const qc = useQueryClient();
 
@@ -35,6 +37,7 @@ export function Sidebar() {
     try { audio.pause(); audio.removeAttribute('src'); audio.load(); } catch { /* */ }
     clearQueue();
     qc.clear();
+    setUser(null);
     setPhase('login');
   };
 
@@ -88,6 +91,23 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="px-3 py-3 border-t border-white/5">
+        {user && (
+          <div className="px-3 pb-2 flex items-center gap-2 text-[12px]" style={{ color: 'var(--color-fg-soft)' }}>
+            <div
+              className="w-7 h-7 rounded-full grid place-items-center text-[12px] font-semibold shrink-0"
+              style={{ background: user.role === 'admin' ? 'linear-gradient(135deg,#c7a8ff,#ff8ec7)' : 'rgba(255,255,255,0.08)', color: user.role === 'admin' ? '#1a1a1a' : '#fff' }}
+              aria-label={user.role}
+            >
+              {user.username[0]?.toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-white">{user.username}</div>
+              <div className="text-[10px] uppercase tracking-[0.14em]" style={{ color: 'var(--color-fg-mute)' }}>
+                {user.role === 'admin' ? '管理员' : '听众'}
+              </div>
+            </div>
+          </div>
+        )}
         <button
           onClick={logout}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] hover:bg-white/[0.04] transition"

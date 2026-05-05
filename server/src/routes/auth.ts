@@ -1,7 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import {
-  SESSION_COOKIE, checkPassword, createSession, destroySession, isConfigured,
-  loginAttemptFailed, loginAttemptSucceeded, loginThrottleCheck, setPassword, validateSession
+  SESSION_COOKIE, createSession, createUser, destroySession, findUserByPin,
+  isConfigured, loginAttemptFailed, loginAttemptSucceeded, loginThrottleCheck,
+  setUserPin, userBySession, userById
 } from '../auth.js';
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
@@ -24,39 +25,46 @@ function clearSessionCookie(reply: any) {
 export const authRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/auth/status', async (req) => {
     const token = (req as any).cookies?.[SESSION_COOKIE];
+    const user = userBySession(token);
     return {
       configured: isConfigured(),
-      authenticated: validateSession(token)
+      authenticated: !!user,
+      user: user ? { id: user.id, username: user.username, role: user.role } : null
     };
   });
 
-  app.post<{ Body: { password: string } }>('/api/auth/setup', async (req, reply) => {
-    if (isConfigured()) return reply.code(409).send({ error: '密码已设置，请直接登录' });
-    const password = String(req.body?.password ?? '');
-    if (password.length < 4) return reply.code(400).send({ error: '密码至少 4 位' });
-    setPassword(password);
-    const token = createSession(req.headers['user-agent']);
-    setSessionCookie(reply, token);
-    return { ok: true };
+  app.post<{ Body: { pin: string; username?: string } }>('/api/auth/setup', async (req, reply) => {
+    if (isConfigured()) return reply.code(409).send({ error: '已存在管理员账号，请直接登录' });
+    const pin = String(req.body?.pin ?? '');
+    const username = String(req.body?.username ?? 'admin').trim() || 'admin';
+    try {
+      const user = createUser(username, pin, 'admin');
+      const token = createSession(user.id, req.headers['user-agent']);
+      setSessionCookie(reply, token);
+      return { ok: true, user: { id: user.id, username: user.username, role: user.role } };
+    } catch (e) {
+      return reply.code(400).send({ error: (e as Error).message });
+    }
   });
 
-  app.post<{ Body: { password: string } }>('/api/auth/login', async (req, reply) => {
-    if (!isConfigured()) return reply.code(409).send({ error: '请先设置密码', needsSetup: true });
+  app.post<{ Body: { pin: string } }>('/api/auth/login', async (req, reply) => {
+    if (!isConfigured()) return reply.code(409).send({ error: '请先设置管理员', needsSetup: true });
     const ip = (req.ip || req.headers['x-forwarded-for'] || 'unknown') as string;
     const throttle = loginThrottleCheck(ip);
     if (!throttle.ok) {
       reply.header('Retry-After', Math.ceil(throttle.retryAfterMs / 1000));
-      return reply.code(429).send({ error: `请稍后再试`, retryAfterMs: throttle.retryAfterMs });
+      return reply.code(429).send({ error: '请稍后再试', retryAfterMs: throttle.retryAfterMs });
     }
-    const password = String(req.body?.password ?? '');
-    if (!checkPassword(password)) {
+    const pin = String(req.body?.pin ?? '');
+    const user = findUserByPin(pin);
+    if (!user) {
       loginAttemptFailed(ip);
-      return reply.code(401).send({ error: '密码错误' });
+      return reply.code(401).send({ error: 'PIN 错误' });
     }
     loginAttemptSucceeded(ip);
-    const token = createSession(req.headers['user-agent']);
+    const token = createSession(user.id, req.headers['user-agent']);
     setSessionCookie(reply, token);
-    return { ok: true };
+    return { ok: true, user: { id: user.id, username: user.username, role: user.role } };
   });
 
   app.post('/api/auth/logout', async (req, reply) => {
@@ -66,13 +74,20 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     return { ok: true };
   });
 
-  app.post<{ Body: { current: string; next: string } }>('/api/auth/password', async (req, reply) => {
-    if (!isConfigured()) return reply.code(409).send({ error: '尚未设置密码' });
+  // Change own PIN
+  app.post<{ Body: { current: string; next: string } }>('/api/auth/pin', async (req, reply) => {
+    const me = (req as any).user as { id: number } | undefined;
+    if (!me) return reply.code(401).send({ error: 'unauthorized' });
     const cur = String(req.body?.current ?? '');
     const nxt = String(req.body?.next ?? '');
-    if (!checkPassword(cur)) return reply.code(401).send({ error: '当前密码错误' });
-    if (nxt.length < 4) return reply.code(400).send({ error: '新密码至少 4 位' });
-    setPassword(nxt);
-    return { ok: true };
+    // Verify current PIN belongs to current user
+    const user = findUserByPin(cur);
+    if (!user || user.id !== me.id) return reply.code(401).send({ error: '当前 PIN 错误' });
+    try {
+      setUserPin(me.id, nxt);
+      return { ok: true };
+    } catch (e) {
+      return reply.code(400).send({ error: (e as Error).message });
+    }
   });
 };

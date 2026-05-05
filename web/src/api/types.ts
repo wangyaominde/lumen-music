@@ -116,3 +116,19 @@ export interface EnrichBatchState {
   startedAt: number | null;
   finishedAt: number | null;
 }
+
+export type Role = 'admin' | 'listener';
+
+export interface User {
+  id: number;
+  username: string;
+  role: Role;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface AuthStatus {
+  configured: boolean;
+  authenticated: boolean;
+  user: { id: number; username: string; role: Role } | null;
+}

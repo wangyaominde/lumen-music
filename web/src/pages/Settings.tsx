@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../api';
 import { PlusIcon, RefreshIcon, TrashIcon } from '../components/icons';
+import { useAuth } from '../store/auth';
+import type { Role } from '../api/types';
 
 const SparkleIcon = () => (
   <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -13,6 +15,23 @@ const SparkleIcon = () => (
 
 export function SettingsPage() {
   const qc = useQueryClient();
+  const isAdmin = useAuth(s => s.user?.role === 'admin');
+
+  // Listeners only see "change my PIN" — no library / scan / scrape / users.
+  if (!isAdmin) {
+    return (
+      <div className="px-10 py-10 max-w-3xl">
+        <div className="mb-8">
+          <div className="text-[12px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-fg-mute)' }}>偏好</div>
+          <h1 className="text-[28px] font-semibold mt-1">设置</h1>
+        </div>
+        <PasswordSection />
+        <div className="mt-8 text-[12px] leading-relaxed" style={{ color: 'var(--color-fg-mute)' }}>
+          仅管理员可以管理音乐库目录、扫描和元数据刮削。
+        </div>
+      </div>
+    );
+  }
   const { data: dirs } = useQuery({ queryKey: ['scan-dirs'], queryFn: api.scanDirs });
   const { data: status } = useQuery({
     queryKey: ['scan-status'],
@@ -141,6 +160,8 @@ export function SettingsPage() {
 
       <EnrichmentSection />
 
+      <UsersSection />
+
       <PasswordSection />
 
       <div className="mt-8 text-[12px] leading-relaxed" style={{ color: 'var(--color-fg-mute)' }}>
@@ -165,7 +186,7 @@ function PasswordSection() {
     if (next !== next2) { setMsg({ kind: 'err', text: '两次新密码不一致' }); return; }
     setBusy(true);
     try {
-      await api.authChangePassword(cur, next);
+      await api.authChangePin(cur, next);
       setMsg({ kind: 'ok', text: '密码已更新' });
       setCur(''); setNext(''); setNext2('');
     } catch (e) {
@@ -293,6 +314,128 @@ function EnrichmentSection() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function UsersSection() {
+  const qc = useQueryClient();
+  const me = useAuth(s => s.user);
+  const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.listUsers });
+
+  const [newName, setNewName] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [newRole, setNewRole] = useState<Role>('listener');
+  const [err, setErr] = useState<string | null>(null);
+
+  const create = useMutation({
+    mutationFn: () => api.createUser(newName.trim(), newPin, newRole),
+    onSuccess: () => {
+      setNewName(''); setNewPin(''); setNewRole('listener'); setErr(null);
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (e: Error) => setErr(e.message)
+  });
+  const del = useMutation({
+    mutationFn: (id: number) => api.deleteUser(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+    onError: (e: Error) => alert(e.message)
+  });
+  const reset = useMutation({
+    mutationFn: ({ id, pin }: { id: number; pin: string }) => api.resetUserPin(id, pin),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+    onError: (e: Error) => alert(e.message)
+  });
+
+  return (
+    <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-6 mt-6">
+      <div className="mb-4">
+        <div className="text-[15px] font-semibold">用户管理</div>
+        <div className="text-[12px] mt-0.5" style={{ color: 'var(--color-fg-soft)' }}>
+          创建只能听歌的家庭账号。每个用户用唯一 PIN 登录，PIN 不能跟其他人重复。
+        </div>
+      </div>
+
+      <div className="space-y-1 mb-5">
+        {(users ?? []).map(u => (
+          <div key={u.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-black/20 group">
+            <div
+              className="w-8 h-8 rounded-full grid place-items-center text-[12px] font-semibold shrink-0"
+              style={{
+                background: u.role === 'admin' ? 'linear-gradient(135deg,#c7a8ff,#ff8ec7)' : 'rgba(255,255,255,0.08)',
+                color: u.role === 'admin' ? '#1a1a1a' : '#fff'
+              }}
+            >
+              {u.username[0]?.toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] truncate">
+                {u.username}
+                {me?.id === u.id && <span className="ml-2 text-[11px]" style={{ color: 'var(--color-fg-mute)' }}>（你）</span>}
+              </div>
+              <div className="text-[11px]" style={{ color: 'var(--color-fg-mute)' }}>
+                {u.role === 'admin' ? '管理员' : '听众'} · 创建于 {new Date(u.created_at).toLocaleDateString()}
+              </div>
+            </div>
+            <button
+              className="text-[11px] px-2 py-1 rounded-full border border-white/10 hover:bg-white/[0.05] opacity-0 group-hover:opacity-100 transition"
+              onClick={() => {
+                const pin = prompt(`为「${u.username}」重置 PIN（4-12 位数字 / 字符）：`);
+                if (pin && pin.trim()) reset.mutate({ id: u.id, pin: pin.trim() });
+              }}
+            >
+              重置 PIN
+            </button>
+            {me?.id !== u.id && (
+              <button
+                className="btn-icon w-8 h-8 opacity-0 group-hover:opacity-100"
+                onClick={() => { if (confirm(`删除用户「${u.username}」？`)) del.mutate(u.id); }}
+                aria-label="删除"
+              >
+                <TrashIcon width={14} height={14} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="border-t border-white/5 pt-4">
+        <div className="text-[12px] mb-2" style={{ color: 'var(--color-fg-soft)' }}>新建用户</div>
+        <form
+          className="flex gap-2 flex-wrap"
+          onSubmit={(e) => { e.preventDefault(); if (newName.trim() && newPin) create.mutate(); }}
+        >
+          <input
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            placeholder="用户名（如 妈妈）"
+            className="bg-black/30 border border-white/5 px-3 py-2 rounded-lg outline-none focus:border-white/15 text-[13px] w-40"
+          />
+          <input
+            value={newPin}
+            onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
+            placeholder="PIN（数字）"
+            className="bg-black/30 border border-white/5 px-3 py-2 rounded-lg outline-none focus:border-white/15 text-[13px] w-40 font-mono"
+            inputMode="numeric"
+          />
+          <select
+            value={newRole}
+            onChange={e => setNewRole(e.target.value as Role)}
+            className="bg-black/30 border border-white/5 px-3 py-2 rounded-lg outline-none focus:border-white/15 text-[13px]"
+          >
+            <option value="listener">听众</option>
+            <option value="admin">管理员</option>
+          </select>
+          <button
+            type="submit"
+            disabled={create.isPending || !newName.trim() || newPin.length < 4}
+            className="px-4 py-2 rounded-lg bg-white text-black text-[13px] font-medium disabled:opacity-40 flex items-center gap-2"
+          >
+            <PlusIcon width={14} height={14} />创建
+          </button>
+        </form>
+        {err && <div className="text-[12px] text-red-400 mt-2">{err}</div>}
+      </div>
     </div>
   );
 }

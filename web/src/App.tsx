@@ -24,28 +24,32 @@ export function App() {
   const phase = useAuth(s => s.phase);
   const setPhase = useAuth(s => s.setPhase);
 
-  // Bootstrap: figure out if password is set + if we're authenticated.
+  const setUser = useAuth(s => s.setUser);
+
+  // Bootstrap: figure out if any user exists + whether we're authenticated.
   useEffect(() => {
     let cancelled = false;
     api.authStatus()
       .then(s => {
         if (cancelled) return;
+        setUser(s.user);
         if (!s.configured) setPhase('setup');
         else if (!s.authenticated) setPhase('login');
         else setPhase('authenticated');
       })
       .catch(() => { if (!cancelled) setPhase('login'); });
     return () => { cancelled = true; };
-  }, [setPhase]);
+  }, [setPhase, setUser]);
 
   // Globally route 401 → login screen (and stop any playback).
   useEffect(() => {
     setUnauthorizedHandler(() => {
       try { audio.pause(); audio.removeAttribute('src'); audio.load(); } catch { /* */ }
+      setUser(null);
       setPhase('login');
     });
     return () => setUnauthorizedHandler(null);
-  }, [setPhase]);
+  }, [setPhase, setUser]);
 
   // Global keyboard shortcuts:
   //   Space            play / pause

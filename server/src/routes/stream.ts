@@ -38,6 +38,16 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
     const ext = extname(track.path).toLowerCase();
     const contentType = MIME[ext] ?? 'application/octet-stream';
 
+    // ETag tied to (size, mtime) — invalidates the browser cache when the
+    // underlying file is replaced (e.g. swapping in a higher-quality version
+    // at the same path).
+    const etag = `"${stats.size.toString(36)}-${Math.floor(stats.mtimeMs).toString(36)}"`;
+    if (req.headers['if-none-match'] === etag && !req.headers.range) {
+      return reply.code(304).send();
+    }
+    reply.header('ETag', etag);
+    reply.header('Cache-Control', 'private, no-cache, must-revalidate');
+
     const range = req.headers.range;
     if (range) {
       const m = /bytes=(\d+)-(\d*)/.exec(range);

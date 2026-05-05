@@ -112,6 +112,15 @@ CREATE TABLE IF NOT EXISTS auth (
   updated_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'listener')),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   token TEXT PRIMARY KEY,
   created_at INTEGER NOT NULL,
@@ -122,4 +131,26 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_seen ON sessions(last_seen DESC);
 `;
 
+// Idempotent column-add for sessions.user_id (SQLite has no ADD COLUMN
+// IF NOT EXISTS, so we ask PRAGMA first).
+function ensureColumn(table: string, col: string, def: string) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some(c => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+}
+
 db.exec(SCHEMA);
+
+ensureColumn('sessions', 'user_id', 'INTEGER REFERENCES users(id) ON DELETE CASCADE');
+
+// Migrate single-PIN setup → first admin user.
+const legacyAuth = db.prepare('SELECT password_hash, created_at, updated_at FROM auth WHERE id = 1').get() as
+  { password_hash: string; created_at: number; updated_at: number } | undefined;
+const anyUser = db.prepare('SELECT 1 FROM users LIMIT 1').get();
+if (legacyAuth && !anyUser) {
+  db.prepare(
+    'INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+  ).run('admin', legacyAuth.password_hash, 'admin', legacyAuth.created_at, legacyAuth.updated_at);
+  // Old sessions had no user_id — they'll be treated as invalid by the new
+  // auth check, which is what we want.
+  db.exec('DELETE FROM sessions WHERE user_id IS NULL');
+}

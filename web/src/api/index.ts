@@ -1,6 +1,6 @@
 import type {
-  AlbumSummary, ArtistSummary, Candidate, EnrichBatchState, LibraryDir,
-  PlaylistSummary, ScanState, SearchResult, Stats, Track
+  AlbumSummary, ArtistSummary, AuthStatus, Candidate, EnrichBatchState, LibraryDir,
+  PlaylistSummary, Role, ScanState, SearchResult, Stats, Track, User
 } from './types';
 
 // Single subscriber that AuthProvider hooks up — when ANY API call returns
@@ -95,12 +95,20 @@ export const api = {
       results: Array<{ track_id: number; title: string; status: 'applied' | 'skipped' | 'no-match' | 'failed'; chosen?: Candidate; topScore?: number }>;
     }>(`/api/enrich/album/${albumId}`, opts),
 
-  authStatus: () => jget<{ configured: boolean; authenticated: boolean }>('/api/auth/status'),
-  authSetup: (password: string) => jpost<{ ok: true }>('/api/auth/setup', { password }),
-  authLogin: (password: string) => jpost<{ ok: true }>('/api/auth/login', { password }),
+  authStatus: () => jget<AuthStatus>('/api/auth/status'),
+  authSetup: (pin: string, username = 'admin') => jpost<{ ok: true; user: User }>('/api/auth/setup', { pin, username }),
+  authLogin: (pin: string) => jpost<{ ok: true; user: User }>('/api/auth/login', { pin }),
   authLogout: () => jpost<{ ok: true }>('/api/auth/logout', {}),
-  authChangePassword: (current: string, next: string) =>
-    jpost<{ ok: true }>('/api/auth/password', { current, next })
+  authChangePin: (current: string, next: string) =>
+    jpost<{ ok: true }>('/api/auth/pin', { current, next }),
+
+  // admin-only
+  listUsers: () => jget<User[]>('/api/users'),
+  createUser: (username: string, pin: string, role: Role = 'listener') =>
+    jpost<{ ok: true; user: User }>('/api/users', { username, pin, role }),
+  resetUserPin: (id: number, pin: string) =>
+    jpost<{ ok: true }>(`/api/users/${id}/pin`, { pin }),
+  deleteUser: (id: number) => jdel<{ ok: true }>(`/api/users/${id}`)
 };
 
 export const coverUrl = (albumId: number | null | undefined, has?: number | boolean) =>

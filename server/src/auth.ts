@@ -1,15 +1,27 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { db } from './db.js';
 
-const SCRYPT_N = 1 << 14; // CPU/memory cost
+const SCRYPT_N = 1 << 14;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const KEY_LEN = 64;
 
+export const SESSION_COOKIE = 'lumen_session';
+
+export type Role = 'admin' | 'listener';
+
+export interface User {
+  id: number;
+  username: string;
+  role: Role;
+  created_at: number;
+  updated_at: number;
+}
+
+// --- password hashing ---
+
 export function hashPassword(password: string): string {
-  if (!password || password.length < 4) {
-    throw new Error('password must be at least 4 characters');
-  }
+  if (!password || password.length < 4) throw new Error('PIN 至少 4 位');
   const salt = randomBytes(16);
   const key = scryptSync(password, salt, KEY_LEN, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P });
   return `scrypt:${SCRYPT_N}:${SCRYPT_R}:${SCRYPT_P}:${salt.toString('hex')}:${key.toString('hex')}`;
@@ -29,45 +41,104 @@ export function verifyPassword(password: string, stored: string): boolean {
   }
 }
 
+// --- users ---
+
 export function isConfigured(): boolean {
-  const row = db.prepare('SELECT 1 FROM auth WHERE id = 1').get();
-  return !!row;
+  return !!db.prepare('SELECT 1 FROM users LIMIT 1').get();
 }
 
-export function setPassword(password: string) {
-  const hash = hashPassword(password);
-  const now = Date.now();
-  if (isConfigured()) {
-    db.prepare('UPDATE auth SET password_hash = ?, updated_at = ? WHERE id = 1').run(hash, now);
-  } else {
-    db.prepare('INSERT INTO auth (id, password_hash, created_at, updated_at) VALUES (1, ?, ?, ?)').run(hash, now, now);
+export function userById(id: number): User | undefined {
+  return db.prepare('SELECT id, username, role, created_at, updated_at FROM users WHERE id = ?').get(id) as User | undefined;
+}
+
+export function userByUsername(username: string): User | undefined {
+  return db.prepare('SELECT id, username, role, created_at, updated_at FROM users WHERE username = ?').get(username) as User | undefined;
+}
+
+export function listUsers(): User[] {
+  return db.prepare('SELECT id, username, role, created_at, updated_at FROM users ORDER BY id').all() as User[];
+}
+
+export function userCount(): number {
+  return (db.prepare('SELECT COUNT(*) AS c FROM users').get() as { c: number }).c;
+}
+
+/**
+ * Find which user a PIN belongs to. Iterates all users and timing-safe verifies
+ * against each. With personal-scale user bases (< 100) this is fine — ~50ms per
+ * scrypt verify. For larger bases we'd add a cheap deterministic index.
+ *
+ * Iterating in random order would give better timing-attack resistance, but
+ * since each verify is constant-time and we always finish the loop, the
+ * observable timing is roughly the same regardless of which user matched.
+ */
+export function findUserByPin(pin: string): User | null {
+  if (!pin) return null;
+  const rows = db.prepare(
+    'SELECT id, username, role, password_hash, created_at, updated_at FROM users'
+  ).all() as Array<User & { password_hash: string }>;
+  let match: User | null = null;
+  for (const r of rows) {
+    const ok = verifyPassword(pin, r.password_hash);
+    if (ok && !match) {
+      const { password_hash: _, ...u } = r;
+      match = u;
+      // keep iterating to even out timing
+    }
   }
+  return match;
 }
 
-export function checkPassword(password: string): boolean {
-  const row = db.prepare('SELECT password_hash FROM auth WHERE id = 1').get() as { password_hash: string } | undefined;
-  if (!row) return false;
-  return verifyPassword(password, row.password_hash);
+export function createUser(username: string, pin: string, role: Role): User {
+  if (!username) throw new Error('用户名不能为空');
+  if (username.length < 1 || username.length > 32) throw new Error('用户名长度需在 1-32 之间');
+  if (userByUsername(username)) throw new Error('该用户名已存在');
+  // Collisions of PINs are not allowed — login lookup is by PIN alone.
+  if (findUserByPin(pin)) throw new Error('该 PIN 已被使用，请换一个');
+  const hash = hashPassword(pin);
+  const now = Date.now();
+  const r = db.prepare(
+    'INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(username, hash, role, now, now);
+  return userById(Number(r.lastInsertRowid))!;
+}
+
+export function setUserPin(userId: number, pin: string) {
+  // Make sure the new PIN doesn't collide with any other user.
+  const existing = findUserByPin(pin);
+  if (existing && existing.id !== userId) throw new Error('该 PIN 已被使用，请换一个');
+  const hash = hashPassword(pin);
+  db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(hash, Date.now(), userId);
+}
+
+export function deleteUser(userId: number) {
+  // sessions cascade on FK
+  db.prepare('DELETE FROM users WHERE id = ?').run(userId);
 }
 
 // --- sessions ---
 
-export function createSession(userAgent?: string): string {
+export function createSession(userId: number, userAgent?: string): string {
   const token = randomBytes(32).toString('hex');
   const now = Date.now();
-  db.prepare('INSERT INTO sessions (token, created_at, last_seen, user_agent) VALUES (?, ?, ?, ?)').run(token, now, now, userAgent ?? null);
+  db.prepare('INSERT INTO sessions (token, user_id, created_at, last_seen, user_agent) VALUES (?, ?, ?, ?, ?)').run(
+    token, userId, now, now, userAgent ?? null
+  );
   return token;
 }
 
-export function validateSession(token: string | undefined): boolean {
-  if (!token) return false;
-  const row = db.prepare('SELECT token FROM sessions WHERE token = ?').get(token);
-  if (!row) return false;
-  // touch last_seen (not on every hit, only if older than 1h, to reduce writes)
+export function userBySession(token: string | undefined): User | null {
+  if (!token) return null;
+  const row = db.prepare(`
+    SELECT u.id, u.username, u.role, u.created_at, u.updated_at
+    FROM sessions s JOIN users u ON u.id = s.user_id
+    WHERE s.token = ?
+  `).get(token) as User | undefined;
+  if (!row) return null;
   const oneHour = 60 * 60 * 1000;
   db.prepare('UPDATE sessions SET last_seen = ? WHERE token = ? AND last_seen < ?')
     .run(Date.now(), token, Date.now() - oneHour);
-  return true;
+  return row;
 }
 
 export function destroySession(token: string | undefined) {
@@ -75,7 +146,11 @@ export function destroySession(token: string | undefined) {
   db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
 }
 
-// --- brute-force throttle (in-memory) ---
+export function destroyAllSessionsForUser(userId: number) {
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+}
+
+// --- brute-force throttle ---
 
 const attempts = new Map<string, { count: number; until: number }>();
 
@@ -89,7 +164,6 @@ export function loginThrottleCheck(key: string): { ok: true } | { ok: false; ret
 export function loginAttemptFailed(key: string) {
   const a = attempts.get(key) ?? { count: 0, until: 0 };
   a.count += 1;
-  // exponential cool-off: 1, 2, 5, 10, 30, 60s
   const ladder = [0, 1000, 2000, 5000, 10000, 30000, 60000];
   const wait = ladder[Math.min(a.count, ladder.length - 1)];
   a.until = Date.now() + wait;
@@ -99,5 +173,3 @@ export function loginAttemptFailed(key: string) {
 export function loginAttemptSucceeded(key: string) {
   attempts.delete(key);
 }
-
-export const SESSION_COOKIE = 'lumen_session';

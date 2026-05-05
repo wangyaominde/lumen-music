@@ -15,7 +15,8 @@ import { favoriteRoutes } from './routes/favorites.js';
 import { lyricsRoutes } from './routes/lyrics.js';
 import { enrichRoutes } from './routes/enrich.js';
 import { authRoutes } from './routes/auth.js';
-import { SESSION_COOKIE, validateSession } from './auth.js';
+import { userRoutes } from './routes/users.js';
+import { SESSION_COOKIE, userBySession } from './auth.js';
 
 const app = Fastify({ logger: { level: 'info' }, bodyLimit: 50 * 1024 * 1024 });
 
@@ -30,20 +31,39 @@ app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body,
 await app.register(cors, { origin: true, credentials: true });
 await app.register(cookie);
 
-// Auth gate: every /api/* call (except /api/auth/*) requires a valid session.
-// Static assets / index.html pass through — the SPA itself is harmless without
-// data; the gate just denies the data.
+// Endpoints that require admin role. Listeners get 403 here.
+const ADMIN_PREFIXES = ['/api/scan', '/api/enrich', '/api/users'];
+
+// Auth gate: every /api/* call (except /api/auth/login|setup|status|logout)
+// requires a valid session. A session resolves to a user; admin-only routes
+// further require role==='admin'. Static assets / index.html pass through —
+// the SPA itself is harmless without data; the gate just denies the data.
 app.addHook('preHandler', async (req, reply) => {
   const url = req.url.split('?')[0];
   if (!url.startsWith('/api/')) return;
-  if (url.startsWith('/api/auth/')) return;
+
+  const isPublicAuth =
+    url === '/api/auth/login' ||
+    url === '/api/auth/setup' ||
+    url === '/api/auth/status' ||
+    url === '/api/auth/logout';
   const token = (req as any).cookies?.[SESSION_COOKIE];
-  if (!validateSession(token)) {
-    return reply.code(401).send({ error: 'unauthorized' });
+  const user = userBySession(token);
+
+  if (isPublicAuth) {
+    if (user) (req as any).user = user;
+    return;
+  }
+  if (!user) return reply.code(401).send({ error: 'unauthorized' });
+  (req as any).user = user;
+
+  if (user.role !== 'admin' && ADMIN_PREFIXES.some(p => url.startsWith(p))) {
+    return reply.code(403).send({ error: 'admin only' });
   }
 });
 
 await app.register(authRoutes);
+await app.register(userRoutes);
 await app.register(libraryRoutes);
 await app.register(scanRoutes);
 await app.register(coverRoutes);
