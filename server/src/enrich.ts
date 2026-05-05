@@ -485,6 +485,55 @@ async function tryFetchImage(url: string, headers: Record<string, string>, timeo
   } catch { return null; }
 }
 
+/**
+ * Decide whether a candidate is good enough to auto-apply for a given track.
+ * Two layers:
+ *   - Score-based: MB ≥ 0.65, NetEase ≥ 0.82 (lowered from the original 0.78
+ *     and 0.95 because those rejected too many legitimate matches).
+ *   - Semantic short-circuit: even with a lower score, if the title near-
+ *     equals the existing title AND (artist near-equals OR duration is within
+ *     3s of the recording length), it's almost certainly the right match
+ *     — accept it.
+ * Returns the candidate to apply, or null if nothing qualifies.
+ */
+export function pickAutoApplyCandidate(
+  track: { title: string; artist_name: string; duration: number | null },
+  candidates: Candidate[],
+  opts: { minScoreMb?: number; minScoreNe?: number } = {}
+): Candidate | null {
+  const minMb = opts.minScoreMb ?? 0.65;
+  const minNe = opts.minScoreNe ?? 0.82;
+
+  const ntTrack = normTitle(track.title);
+  const naTrack = (track.artist_name || '').trim().toLowerCase();
+
+  for (const c of candidates) {
+    // Score-based fast path.
+    if (c.source === 'musicbrainz' && c.score >= minMb) return c;
+    if (c.source === 'netease' && c.score >= minNe) return c;
+
+    // Semantic short-circuit.
+    const ntCand = normTitle(c.title);
+    const titleClose = ntCand === ntTrack || nearEqual(ntCand, ntTrack);
+    if (!titleClose) continue;
+
+    const cArtist = (c.artist || '').trim().toLowerCase();
+    const artistClose =
+      cArtist === naTrack ||
+      nearEqual(cArtist, naTrack) ||
+      (cArtist && naTrack && (cArtist.includes(naTrack) || naTrack.includes(cArtist)));
+
+    const durationClose =
+      typeof c.duration_ms === 'number' &&
+      typeof track.duration === 'number' &&
+      track.duration > 0 &&
+      Math.abs(c.duration_ms / 1000 - track.duration) < 3;
+
+    if (artistClose || durationClose) return c;
+  }
+  return null;
+}
+
 function normTitle(s: string): string {
   return s.trim().toLowerCase().replace(/[\s（()）\[\]【】]/g, '');
 }
@@ -680,13 +729,19 @@ export async function enrichBatch(opts: { minScore?: number; onlyWeak?: boolean 
   });
 
   try {
+    // "Weak" = anything where the existing tags clearly need help. Catches
+    // empty / Unknown placeholders AND U+FFFD mojibake markers AND leftover
+    // singletons from previous bad scrapes.
     const tracks = opts.onlyWeak !== false
       ? db.prepare(`
           SELECT id FROM tracks
           WHERE artist_name IN ('', 'Unknown Artist')
              OR album_name IN ('', 'Unknown Album')
              OR title IN ('', 'Unknown')
-             OR title = REPLACE(REPLACE(REPLACE(LOWER(SUBSTR(path, 1)), '.flac', ''), '.mp3', ''), '.m4a', '')
+             OR title    LIKE '%' || char(65533) || '%'
+             OR artist_name LIKE '%' || char(65533) || '%'
+             OR album_name  LIKE '%' || char(65533) || '%'
+             OR album_id IN (SELECT id FROM albums WHERE track_count <= 1)
         `).all() as { id: number }[]
       : db.prepare('SELECT id FROM tracks').all() as { id: number }[];
 
@@ -696,16 +751,11 @@ export async function enrichBatch(opts: { minScore?: number; onlyWeak?: boolean 
     enrichState.total = tracks.length + noCoverAlbums.length;
     for (const { id } of tracks) {
       try {
-        const t = db.prepare('SELECT title, artist_name FROM tracks WHERE id = ?').get(id) as any;
+        const t = db.prepare('SELECT title, artist_name, duration FROM tracks WHERE id = ?').get(id) as
+          { title: string; artist_name: string; duration: number | null } | undefined;
         enrichState.current = `${t?.artist_name ?? ''} – ${t?.title ?? ''}`;
         const { candidates } = await getCandidates(id);
-        // For automatic application we accept ONLY MusicBrainz high-confidence,
-        // or NetEase candidates with a near-perfect artist+title match.
-        // Path heuristic alone is never auto-applied.
-        const top = candidates.find(c =>
-          (c.source === 'musicbrainz' && c.score >= minScore) ||
-          (c.source === 'netease' && c.score >= 0.95)
-        );
+        const top = t ? pickAutoApplyCandidate(t, candidates, { minScoreMb: minScore }) : null;
         if (top) {
           await applyCandidate(id, top);
           enrichState.improved++;

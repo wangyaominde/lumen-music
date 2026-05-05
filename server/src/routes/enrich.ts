@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { applyCandidate, enrichBatch, enrichState, fetchCoverWithFallbacks, getCandidates, recomputeAggregates, type Candidate } from '../enrich.js';
+import { applyCandidate, enrichBatch, enrichState, fetchCoverWithFallbacks, getCandidates, pickAutoApplyCandidate, recomputeAggregates, type Candidate } from '../enrich.js';
 import { db } from '../db.js';
 import { COVERS_DIR } from '../config.js';
 
@@ -148,10 +148,11 @@ export const enrichRoutes: FastifyPluginAsync = async (app) => {
 
     for (const t of tracks) {
       try {
-        const { candidates } = await getCandidates(t.id);
-        const top = candidates.find(c =>
-          (c.source === 'musicbrainz' && c.score >= minScore) ||
-          (c.source === 'netease' && c.score >= 0.95)
+        const { candidates, track: trackRow } = await getCandidates(t.id);
+        const top = pickAutoApplyCandidate(
+          { title: trackRow.title, artist_name: trackRow.artist_name, duration: trackRow.duration },
+          candidates,
+          { minScoreMb: minScore }
         );
         if (top) {
           if (!canonicalAlbum && top.album) {
