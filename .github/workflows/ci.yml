@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build & typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck server
+        run: pnpm --filter @lumen/server exec tsc -p tsconfig.json --noEmit
+
+      - name: Typecheck web
+        run: pnpm --filter @lumen/web exec tsc -b
+
+      - name: Build server
+        run: pnpm --filter @lumen/server build
+
+      - name: Build web
+        run: pnpm --filter @lumen/web build
+
+      - name: Smoke test (boot server, hit /api/auth/status, kill)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/lumen-data
+          LUMEN_DATA_DIR=/tmp/lumen-data PORT=4499 \
+            node server/dist/index.js &
+          SRV_PID=$!
+          for i in $(seq 1 20); do
+            if curl -fs http://127.0.0.1:4499/api/auth/status >/dev/null 2>&1; then
+              break
+            fi
+            sleep 0.5
+          done
+          curl -fsS http://127.0.0.1:4499/api/auth/status | tee /dev/stderr | grep -q '"configured":false'
+          kill $SRV_PID

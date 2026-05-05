@@ -1,0 +1,82 @@
+name: Release
+
+# Trigger:
+#   git tag v0.1.0 && git push --tags
+# This workflow builds a self-contained production bundle for each target
+# platform and attaches the tarballs to the GitHub Release for that tag.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write   # needed to create / upload to releases
+
+concurrency:
+  group: release-${{ github.ref_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-latest
+          - target: linux-arm64
+            os: ubuntu-24.04-arm
+          - target: darwin-arm64
+            os: macos-14
+          - target: darwin-x64
+            os: macos-13
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build production bundle
+        run: pnpm package
+
+      - name: Tar bundle
+        id: tar
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag || github.ref_name }}"
+          ARCHIVE="lumen-music-${TAG}-${{ matrix.target }}.tar.gz"
+          tar -czf "$ARCHIVE" -C release .
+          shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
+          ls -lh "$ARCHIVE" "$ARCHIVE.sha256"
+          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: ${{ inputs.tag || github.ref_name }}
+          files: |
+            ${{ steps.tar.outputs.archive }}
+            ${{ steps.tar.outputs.archive }}.sha256
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
