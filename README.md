@@ -40,8 +40,10 @@
 - 播放队列、随机、单曲循环、列表循环
 - 音量、收藏、播放列表、搜索
 
-### 安全
-- 单密码访问保护（适合公网暴露），**httpOnly cookie session**（30 天）
+### 多用户与安全
+- **两级角色**：首次访问设置的人是 **管理员**（可扫描、刮削、管理用户）；管理员可以在「设置 → 用户管理」给家人添加 **听众**（只能浏览/播放/收藏/改自己的 PIN）
+- **PIN 即身份**：每个用户一个 6 位 PIN，登录只输 PIN（不需要用户名）；PIN 不能跟其他人重复，创建时即拒
+- **httpOnly cookie session**（30 天，反代 HTTPS 时自动开 `Secure` 标志），admin/listener 中间件全局生效
 - scrypt 哈希（N=16384, r=8, p=1，无外部依赖，纯 Node 内置 crypto）
 - 阶梯式登录节流（错 1 次冷却 1s → 2 → 5 → 10 → 30 → 60s，登录成功清零）
 - 首次访问自动进入「设置 PIN」页，6 位数字 OTP 风格输入
@@ -81,9 +83,10 @@ pnpm dev      # server: :4477  web: :5173
 ```
 
 打开 http://localhost:5173 →
-1. 设置 6 位 PIN（首次访问）
-2. 设置 → 添加音乐目录 → 开始扫描
-3. 首页 → ✨ 一键刮削整库（修补缺失元数据）
+1. 设置 6 位 PIN（首次访问的人成为管理员）
+2. 「设置 → 音乐库目录」添加目录 → 开始扫描
+3. 首页 → ✨ 一键刮削整库（修补缺失元数据，自动识别 GBK/Big5 乱码）
+4. 想给家人分享 → 「设置 → 用户管理」添加听众 PIN（只能听不能管理）
 
 ### CLI 直接扫描
 
@@ -133,7 +136,7 @@ cd server && npm rebuild better-sqlite3
 
 | 路径 | 内容 |
 |---|---|
-| `data/library.db` | 曲目 / 专辑 / 艺人 / 播放列表 / 收藏 / 鉴权哈希 / session |
+| `data/library.db` | 曲目 / 专辑 / 艺人 / 播放列表 / 收藏 / 用户 (PIN 哈希 + 角色) / session |
 | `data/covers/` | 提取或刮取的专辑封面（按 `sha1(album_name + album_artist)` 命名）|
 
 仅 `data/` 需要持久化备份。丢了不会丢源文件，但要重新扫描 + 重设 PIN。
@@ -144,12 +147,14 @@ cd server && npm rebuild better-sqlite3
 
 | 策略 | 说明 |
 |---|---|
-| 增量 | 以 `mtime` 跳过未变文件 |
+| 增量 | `mtime` **+** `file_size` 双重检查跳过未变文件，原地替换更高音质（含 `cp -p` 保留时间戳）也能识别 |
 | 专辑去重 | `(album_name, album_artist)` 配对，避免同专辑因不同曲目艺人被分裂 |
 | 优先 albumartist | 分组按 `albumartist` 标签，回退到 track artist |
 | 路径推断 | 当 tag 缺失，从 `Artist/Album/Track.flac` 或 `Artist - Title.flac` 路径反推 |
+| **乱码自动修复** | ID3v2.3 的 GBK / Big5 / Shift_JIS 标签被错当成 Latin-1 时，自动逆向重编码（`ºÚÉ«ÓÄÄ¬` → `黑色幽默`），CJK 命中后才采用；无法恢复的 fallback 到文件名 |
 | 封面提取 | 内嵌图 → 文件夹 `cover.jpg`/`folder.jpg`/`front.jpg`/`AlbumArt.jpg` |
 | 扫尾清理 | 文件被删后下次扫描自动从索引移除 |
+| 流缓存失效 | `/api/stream` 的 ETag 绑定 (size, mtime)，文件一换浏览器立刻拿到新版本 |
 
 ---
 
@@ -167,20 +172,23 @@ cd server && npm rebuild better-sqlite3
 
 ## 键盘快捷键
 
+全局生效。在输入框 / textarea / contenteditable 内自动让位；按 Cmd / Ctrl / Alt 修饰键时不拦截，所以 `Cmd+R` 等浏览器原生快捷键照常工作。
+
 | 键 | 行为 |
 |---|---|
-| `Space` | 播放 / 暂停（在 Now Playing 页）|
+| `Space` | 播放 / 暂停 |
 | `←` / `→` | 上一首 / 下一首 |
-| `Esc` | 收起 Now Playing |
+| `Esc` | 收起 Now Playing（仅在 Now Playing 打开时）|
 
 ---
 
 ## 安全注意事项
 
-- **首次设置 PIN 后立刻访问**避免被路过陌生人抢先初始化
+- **首次访问立刻设管理员 PIN**，避免被路过陌生人抢先初始化为 admin
 - **HTTPS 反代后必须设 `NODE_ENV=production`**，否则 cookie 不会带 `Secure` 标志
-- session 在 SQLite 持久化，修改 `auth` 表的密码或清空 `sessions` 表会让所有设备强制重新登录
-- 鉴权对所有 `/api/*` 全局生效（除 `/api/auth/*`），包括音频流和封面 —— 没有 cookie 拿不到任何内容
+- 听众 (`listener`) 角色拿不到 `/api/scan` `/api/enrich` `/api/users` 任何端点（403），管理员发出的 PIN 即使被泄露也只能听歌
+- session 在 SQLite 持久化（`sessions` 表），管理员重置某用户的 PIN 时会自动撤销该用户所有设备的会话
+- 鉴权对所有 `/api/*` 全局生效（除 `/api/auth/login|setup|status|logout`），包括音频流和封面 —— 没有 cookie 拿不到任何内容
 
 ---
 
@@ -189,7 +197,8 @@ cd server && npm rebuild better-sqlite3
 - MB API 限速 1 r/s 是硬限制，整库刮削大库 (1k+ 曲目) 需要数分钟
 - 部分艺人（如 Jay Chou）在 NetEase / Kugou 因版权下架，原版封面/歌词无源可拿，需手动放 `cover.jpg` 到专辑文件夹
 - 浏览器无法原生播放 APE / DSD，目前直传字节流（计划加 ffmpeg 转码层）
-- 仅支持单用户，无多账号 / ACL（个人自托管定位）
+- FLAC 文件如果元数据被错误编码已经写死了 `�` 替换字符（lossy），无法逆向恢复，scanner 会自动 fallback 到文件名
+- 收藏 / 播放列表当前是**全用户共享**的（适合家庭共享场景）；如果需要每人独立的"喜欢"，欢迎提 issue
 
 ---
 
@@ -199,12 +208,12 @@ cd server && npm rebuild better-sqlite3
 .
 ├── server/                 # Node.js 后端
 │   └── src/
-│       ├── index.ts            # Fastify entry + auth gate
-│       ├── auth.ts             # scrypt + sessions
-│       ├── scanner.ts          # 文件扫描 + path heuristics
+│       ├── index.ts            # Fastify entry + auth gate (admin/listener)
+│       ├── auth.ts             # scrypt + users + sessions
+│       ├── scanner.ts          # 文件扫描 + path heuristics + GBK 乱码修复
 │       ├── enrich.ts           # MB / NetEase / Kugou scraper
-│       ├── db.ts               # SQLite schema
-│       └── routes/             # API 路由
+│       ├── db.ts               # SQLite schema + migration
+│       └── routes/             # API 路由（含 users CRUD）
 ├── web/                    # React 前端
 │   └── src/
 │       ├── pages/              # Home / Albums / Album / Artist / Search / Settings / Login ...
