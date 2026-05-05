@@ -154,6 +154,9 @@ export function SettingsPage() {
               </div>
             )}
             {status.error && <div className="text-[12px] text-red-400 mt-2">{status.error}</div>}
+            {status.failures && status.failures.length > 0 && (
+              <FailuresList failures={status.failures} totalFailed={status.failed} />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -436,6 +439,40 @@ function UsersSection() {
         </form>
         {err && <div className="text-[12px] text-red-400 mt-2">{err}</div>}
       </div>
+    </div>
+  );
+}
+
+function FailuresList({ failures, totalFailed }: { failures: { path: string; error: string; at: number }[]; totalFailed: number }) {
+  const [open, setOpen] = useState(false);
+  const overflow = totalFailed - failures.length;
+  return (
+    <div className="mt-4 border-t border-white/5 pt-3">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="text-[12px] flex items-center gap-2 hover:text-white transition"
+        style={{ color: 'var(--color-fg-soft)' }}
+      >
+        <span>{open ? '隐藏' : '展开'}失败明细</span>
+        <span className="text-[11px]" style={{ color: 'var(--color-fg-mute)' }}>
+          {failures.length}{overflow > 0 ? ` + ${overflow} more` : ''}
+        </span>
+      </button>
+      {open && (
+        <div className="mt-2 max-h-72 overflow-y-auto space-y-1.5 text-[11px] font-mono">
+          {failures.slice().reverse().map((f, i) => (
+            <div key={i} className="px-2 py-1.5 rounded bg-black/30">
+              <div className="truncate" title={f.path} style={{ color: 'var(--color-fg-soft)' }}>{f.path}</div>
+              <div className="text-red-400 break-words mt-0.5">{f.error}</div>
+            </div>
+          ))}
+          {overflow > 0 && (
+            <div className="text-[11px] py-2 text-center" style={{ color: 'var(--color-fg-mute)' }}>
+              还有 {overflow} 条失败未显示，请查看服务端日志（每条失败也会打印到 stderr）
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -7,6 +7,12 @@ import { db } from './db.js';
 import { COVERS_DIR, LOSSLESS_CODECS, SUPPORTED_EXTENSIONS } from './config.js';
 import { parsePathHints } from './enrich.js';
 
+export interface ScanFailure {
+  path: string;
+  error: string;
+  at: number;
+}
+
 export interface ScanState {
   running: boolean;
   total: number;
@@ -20,11 +26,17 @@ export interface ScanState {
   startedAt: number | null;
   finishedAt: number | null;
   error: string | null;
+  // Most recent N failures with the actual error message — surfaced in the
+  // UI so the user can see which files need attention and why.
+  failures: ScanFailure[];
 }
+
+const MAX_FAILURE_LOG = 100;
 
 export const scanState: ScanState = {
   running: false, total: 0, scanned: 0, added: 0, updated: 0, unchanged: 0,
-  removed: 0, failed: 0, current: '', startedAt: null, finishedAt: null, error: null
+  removed: 0, failed: 0, current: '', startedAt: null, finishedAt: null, error: null,
+  failures: []
 };
 
 const SKIP_DIRS = new Set(['$RECYCLE.BIN', 'System Volume Information', 'node_modules', '@eaDir']);
@@ -217,7 +229,19 @@ async function scanFile(file: string): Promise<'added' | 'updated' | 'unchanged'
     if (!stale) return 'unchanged';
   }
 
-  const metadata = await parseFile(file, { duration: true, skipCovers: false });
+  // Some files have malformed embedded cover frames that crash the parser. If
+  // the first attempt throws, retry with covers skipped so we can still index
+  // the audio metadata; lose only the embedded artwork.
+  let metadata;
+  try {
+    metadata = await parseFile(file, { duration: true, skipCovers: false });
+  } catch (firstErr) {
+    try {
+      metadata = await parseFile(file, { duration: true, skipCovers: true });
+    } catch {
+      throw firstErr;
+    }
+  }
   const c = metadata.common;
   const f = metadata.format;
 
@@ -300,7 +324,8 @@ export async function scanLibrary(dirs: string[]): Promise<void> {
   if (scanState.running) return;
   Object.assign(scanState, {
     running: true, total: 0, scanned: 0, added: 0, updated: 0, unchanged: 0,
-    removed: 0, failed: 0, current: '', startedAt: Date.now(), finishedAt: null, error: null
+    removed: 0, failed: 0, current: '', startedAt: Date.now(), finishedAt: null, error: null,
+    failures: [] as ScanFailure[]
   });
 
   try {
@@ -319,8 +344,15 @@ export async function scanLibrary(dirs: string[]): Promise<void> {
         if (status === 'added') scanState.added++;
         else if (status === 'updated') scanState.updated++;
         else scanState.unchanged++;
-      } catch {
+      } catch (e) {
         scanState.failed++;
+        const msg = (e as Error)?.message || String(e);
+        // Keep at most the last MAX_FAILURE_LOG so big libraries don't blow
+        // up memory / response payloads.
+        if (scanState.failures.length >= MAX_FAILURE_LOG) scanState.failures.shift();
+        scanState.failures.push({ path: file, error: msg, at: Date.now() });
+        // Also log server-side so admin can grep logs for the full list.
+        console.warn(`[scan] ${file}: ${msg}`);
       }
       scanState.scanned++;
     }

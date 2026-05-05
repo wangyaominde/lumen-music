@@ -57,6 +57,12 @@ export interface SearchResult {
   artists: ArtistSummary[];
 }
 
+export interface ScanFailure {
+  path: string;
+  error: string;
+  at: number;
+}
+
 export interface ScanState {
   running: boolean;
   total: number;
@@ -70,6 +76,7 @@ export interface ScanState {
   startedAt: number | null;
   finishedAt: number | null;
   error: string | null;
+  failures: ScanFailure[];
 }
 
 export interface LibraryDir {

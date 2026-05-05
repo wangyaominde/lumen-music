@@ -29,7 +29,10 @@ log('cleaning previous release');
 await rm(release, { recursive: true, force: true });
 await mkdir(srvDir, { recursive: true });
 await mkdir(join(release, 'web'), { recursive: true });
-await mkdir(join(release, 'data'), { recursive: true });
+// NOTE: intentionally do NOT create release/data/ here. The bundle ships
+// without a data/ directory so that re-extracting a new tarball over an
+// existing install never touches the user's library.db / covers/. start.sh
+// creates the dir on first launch if missing.
 
 log('building server (tsc → server/dist)');
 sh('pnpm --filter @lumen/server build');
@@ -63,12 +66,43 @@ await cp(join(root, 'web/dist'), join(release, 'web/dist'), { recursive: true })
 log('writing start.sh');
 const startSh = `#!/usr/bin/env sh
 set -e
-cd "$(dirname "$0")/server"
-exec node \\
-  --enable-source-maps \\
-  dist/index.js
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+# Default data dir lives next to the bundle. Override by exporting
+# LUMEN_DATA_DIR before running this script. Created on first launch so the
+# bundle itself stays free of state — re-extracting a new tarball over an
+# old install never touches it.
+: "\${LUMEN_DATA_DIR:=$ROOT/data}"
+export LUMEN_DATA_DIR
+mkdir -p "$LUMEN_DATA_DIR"
+
+cd "$ROOT/server"
+exec node --enable-source-maps dist/index.js
 `;
 await writeFile(join(release, 'start.sh'), startSh, { mode: 0o755 });
+
+log('writing upgrade.sh (in-place upgrade helper)');
+const upgradeSh = `#!/usr/bin/env sh
+# Drop a new lumen-music tarball next to the running install and run this to
+# replace server/ + web/ + start.sh in place while preserving data/. Restart
+# the service afterward.
+#
+#   ./upgrade.sh /path/to/lumen-music-vX.Y.Z-<target>.tar.gz
+set -eu
+TAR="\${1:?usage: ./upgrade.sh <new-bundle.tar.gz>}"
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+echo "Upgrading $ROOT from $TAR ..."
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+tar -xzf "$TAR" -C "$TMP"
+
+# Replace the code-bearing directories. Anything new in the bundle wins.
+rm -rf "$ROOT/server" "$ROOT/web" "$ROOT/start.sh" "$ROOT/upgrade.sh" "$ROOT/README.md" "$ROOT/lumen-music.service" "$ROOT/.env.example" 2>/dev/null || true
+cp -R "$TMP/." "$ROOT/"
+
+echo "Done. Your data/ directory is untouched. Restart the service now."
+`;
+await writeFile(join(release, 'upgrade.sh'), upgradeSh, { mode: 0o755 });
 
 log('writing systemd unit (optional)');
 const unit = `[Unit]
@@ -118,6 +152,24 @@ Built on \`${process.platform}-${process.arch}\` with Node \`${process.version}\
 \`\`\`
 
 Then open \`http://<host>:4477/\`. First visit asks you to set a 6-digit PIN.
+
+## Upgrading
+
+Drop the new tarball alongside the install and run the in-place helper —
+\`data/\` (your library, PIN hashes, sessions, covers) is preserved untouched:
+
+\`\`\`bash
+./upgrade.sh /path/to/lumen-music-vX.Y.Z-<target>.tar.gz
+sudo systemctl restart lumen-music    # or however you run it
+\`\`\`
+
+Or do it manually: extract the new tarball over the install (\`tar\` won't
+delete files inside \`data/\` that the new bundle doesn't contain — the new
+bundle ships without a \`data/\` directory exactly for this reason):
+
+\`\`\`bash
+tar -xzf lumen-music-vX.Y.Z-<target>.tar.gz -C /opt/lumen-music
+\`\`\`
 
 ## Configuration
 
@@ -208,11 +260,14 @@ but it includes scrape results and your access PIN hash.
 │   ├── dist/index.js
 │   └── package.json
 ├── web/dist/                static front-end (served by server)
-├── data/                    library.db, covers/  (created at runtime)
-├── start.sh                 entry script
+├── start.sh                 entry script (creates data/ on first launch)
+├── upgrade.sh               in-place upgrade helper, preserves data/
 ├── lumen-music.service      systemd unit template
 ├── .env.example
 └── README.md
+
+# at runtime, alongside the bundle:
+└── data/                    library.db, covers/   (NOT in the tarball)
 \`\`\`
 `;
 await writeFile(join(release, 'README.md'), readme);
