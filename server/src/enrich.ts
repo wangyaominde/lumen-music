@@ -51,6 +51,13 @@ const TRACK_PREFIX_RE = /^\s*(\d{1,3})[\.\-\s_]+(.+)$/;
 const ARTIST_TITLE_RE = /^(.+?)\s+[\-–—]\s+(.+)$/;
 const YEAR_PAREN_RE = /\s*[\(\[（［]\s*(\d{4})\s*[\)\]）］]\s*/;
 const DISC_RE = /\b(?:cd|disc|disk)\s*0*(\d{1,2})\b/i;
+// Common Chinese / Japanese / Western "collection name" pattern: the artist
+// is wrapped in 《》 / 「」 / 〈〉 / 【】 / [] / () within the folder name. Examples
+// that this resolves correctly:
+//   《周杰伦》黑胶高品质无损音乐合集  →  artist=周杰伦
+//   「King Crimson」Discography (2024) →  artist=King Crimson
+//   [Joe Hisaishi] Studio Ghibli OST  →  artist=Joe Hisaishi
+const COLLECTION_BRACKET_RE = /[《「『〈【\(\[（［]([^》」』〉】\)\]）］]+)[》」』〉】\)\]）］]/;
 
 export function parsePathHints(filePath: string, libraryRoots: string[] = getLibraryDirs()): PathHints {
   const ext = extname(filePath);
@@ -91,10 +98,26 @@ export function parsePathHints(filePath: string, libraryRoots: string[] = getLib
   }
 
   if (segments.length >= 2) {
-    if (!hints.artist) hints.artist = segments[segments.length - 2];
+    const parentSeg = segments[segments.length - 2];
+    // Prefer 《artist》 inside the parent segment over the whole segment text.
+    // Without this, "《周杰伦》黑胶高品质无损音乐合集" gets used verbatim as
+    // the artist, which the scraper then can't match.
+    const collectionMatch = parentSeg.match(COLLECTION_BRACKET_RE);
+    if (collectionMatch && !hints.artist) {
+      hints.artist = collectionMatch[1].trim();
+    } else if (!hints.artist) {
+      hints.artist = parentSeg;
+    }
     hints.album = segments[segments.length - 1];
   } else if (segments.length === 1) {
-    hints.album = segments[0];
+    // Single segment: also check for 《artist》 — author/collection stored as
+    // a single root folder.
+    const collectionMatch = segments[0].match(COLLECTION_BRACKET_RE);
+    if (collectionMatch && !hints.artist) {
+      hints.artist = collectionMatch[1].trim();
+    } else {
+      hints.album = segments[0];
+    }
   }
 
   if (hints.album) {

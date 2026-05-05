@@ -48,15 +48,19 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
     reply.header('ETag', etag);
     reply.header('Cache-Control', 'private, no-cache, must-revalidate');
 
-    // When the browser cancels (track switched mid-load, user paused, etc.)
-    // we have to actively destroy the file read stream so its file descriptor
-    // and the underlying socket get released. Without this, rapid track
-    // switching piles up half-open streams and eventually the browser hits
-    // its 6-per-origin connection cap, freezing playback.
+    // Destroy the file read stream IF the response gets cut off before
+    // completion (browser cancels mid-track, etc.). Crucially, do NOT destroy
+    // when the response finishes successfully — `reply.raw.writableFinished`
+    // distinguishes the two. Earlier we hooked req.raw 'close' which also
+    // fires on successful completion, occasionally truncating the response
+    // and surfacing as "Load failed" in the audio element.
     const attachAbortCleanup = (s: NodeJS.ReadableStream) => {
-      const onAbort = () => { (s as any).destroy?.(); };
-      req.raw.once('close', onAbort);
-      req.raw.once('aborted', onAbort);
+      const onClose = () => {
+        if (!reply.raw.writableFinished && !(s as any).destroyed) {
+          (s as any).destroy?.();
+        }
+      };
+      reply.raw.once('close', onClose);
       return s;
     };
 

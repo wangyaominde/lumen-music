@@ -340,6 +340,16 @@ audio.addEventListener('play', () => usePlayer.getState()._setIsPlaying(true));
 audio.addEventListener('pause', () => usePlayer.getState()._setIsPlaying(false));
 audio.addEventListener('ended', () => usePlayer.getState().next(true));
 
+// Surface load / decode errors to the console so "playback freezes" becomes
+// debuggable instead of a silent stop. MEDIA_ERR_ codes:
+//   1 ABORTED   2 NETWORK   3 DECODE   4 SRC_NOT_SUPPORTED
+audio.addEventListener('error', () => {
+  const err = audio.error;
+  if (!err) return;
+  const codes = ['', 'ABORTED', 'NETWORK', 'DECODE', 'SRC_NOT_SUPPORTED'];
+  console.warn(`[lumen] audio error: code=${err.code} (${codes[err.code] ?? '?'}) src=${audio.src}`, err.message);
+});
+
 audio.volume = usePlayer.getState().volume;
 audio.muted = usePlayer.getState().muted;
 

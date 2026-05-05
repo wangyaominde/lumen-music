@@ -126,6 +126,48 @@ function repairText(s: string | undefined | null): string | null {
   );
 }
 
+// Last-resort metadata when music-metadata throws. We give scanFile something
+// shaped like a real IAudioMetadata so the rest of the pipeline (path-hint
+// fallbacks, repair, upsert) keeps working untouched.
+const EXT_PROFILE: Record<string, { codec: string; container: string; lossless: boolean }> = {
+  '.flac': { codec: 'FLAC',     container: 'FLAC', lossless: true  },
+  '.wav':  { codec: 'PCM',      container: 'WAVE', lossless: true  },
+  '.aiff': { codec: 'PCM',      container: 'AIFF', lossless: true  },
+  '.aif':  { codec: 'PCM',      container: 'AIFF', lossless: true  },
+  '.alac': { codec: 'ALAC',     container: 'M4A',  lossless: true  },
+  '.m4a':  { codec: 'AAC',      container: 'MP4',  lossless: false },
+  '.mp4':  { codec: 'AAC',      container: 'MP4',  lossless: false },
+  '.aac':  { codec: 'AAC',      container: 'AAC',  lossless: false },
+  '.mp3':  { codec: 'MPEG',     container: 'MPEG', lossless: false },
+  '.ogg':  { codec: 'Vorbis',   container: 'OGG',  lossless: false },
+  '.opus': { codec: 'Opus',     container: 'OGG',  lossless: false },
+  '.ape':  { codec: 'APE',      container: 'APE',  lossless: true  },
+  '.wv':   { codec: 'WavPack',  container: 'WV',   lossless: true  },
+  '.dsf':  { codec: 'DSD',      container: 'DSF',  lossless: true  },
+  '.dff':  { codec: 'DSD',      container: 'DFF',  lossless: true  }
+};
+
+function synthesizeMetadataFromPath(file: string): { common: any; format: any } {
+  const ext = extname(file).toLowerCase();
+  const profile = EXT_PROFILE[ext] ?? { codec: ext.replace('.', '').toUpperCase() || 'UNKNOWN', container: '', lossless: false };
+  return {
+    common: {
+      // empty — pickField will fall through to path hints / filename for
+      // everything (title, artist, album, album_artist).
+    },
+    format: {
+      codec: profile.codec,
+      container: profile.container,
+      lossless: profile.lossless,
+      duration: null,
+      bitrate: null,
+      sampleRate: null,
+      bitsPerSample: null,
+      numberOfChannels: null
+    }
+  };
+}
+
 /**
  * Pick the best-available value for a tag field:
  *   1. If raw tag is fine, use it.
@@ -229,17 +271,26 @@ async function scanFile(file: string): Promise<'added' | 'updated' | 'unchanged'
     if (!stale) return 'unchanged';
   }
 
-  // Some files have malformed embedded cover frames that crash the parser. If
-  // the first attempt throws, retry with covers skipped so we can still index
-  // the audio metadata; lose only the embedded artwork.
+  // Three-tier resilience:
+  //   1. parseFile with covers (best case)
+  //   2. parseFile without covers — for files with malformed embedded artwork
+  //   3. Synthesize minimal metadata from path + extension. Some non-standard
+  //      WAV/FLAC headers (looking at you, OneDrive-roundtripped files) blow
+  //      up music-metadata's chunk math with negative offsets. Rather than
+  //      drop the file, we still index it: the user's path tells us
+  //      artist/album/title, the extension tells us codec/lossless, and the
+  //      browser can still play the bytes via /api/stream.
   let metadata;
+  let fallbackMeta = false;
   try {
     metadata = await parseFile(file, { duration: true, skipCovers: false });
   } catch (firstErr) {
     try {
       metadata = await parseFile(file, { duration: true, skipCovers: true });
     } catch {
-      throw firstErr;
+      console.warn(`[scan] metadata parse failed, indexing with path-only fallback: ${file}`);
+      metadata = synthesizeMetadataFromPath(file);
+      fallbackMeta = true;
     }
   }
   const c = metadata.common;
