@@ -28,7 +28,7 @@ export function AlbumPage() {
   const shuffle = usePlayer(s => s.shuffle);
   const [palette, setPalette] = useState<{ p: [number, number, number]; s: [number, number, number] } | null>(null);
   const [scraping, setScraping] = useState(false);
-  const [scrapeResult, setScrapeResult] = useState<{ applied: number; skipped: number; noMatch: number; failed: number; total: number } | null>(null);
+  const [scrapeResult, setScrapeResult] = useState<{ applied: number; skipped: number; noMatch: number; failed: number; total: number; consolidated?: number } | null>(null);
 
   const runScrape = async () => {
     if (!albumId || scraping) return;
@@ -154,6 +154,7 @@ export function AlbumPage() {
                   {scrapeResult.skipped > 0 && <> · 信心不足跳过 <b className="text-white">{scrapeResult.skipped}</b></>}
                   {scrapeResult.noMatch > 0 && <> · 无匹配 <b className="text-white">{scrapeResult.noMatch}</b></>}
                   {scrapeResult.failed > 0 && <> · 失败 <b className="text-red-400">{scrapeResult.failed}</b></>}
+                  {scrapeResult.consolidated && scrapeResult.consolidated > 0 ? <> · 同目录归并 <b className="text-white">{scrapeResult.consolidated}</b></> : null}
                 </span>
               </div>
               <button onClick={() => setScrapeResult(null)} className="text-[12px] hover:underline" style={{ color: 'var(--color-fg-mute)' }}>关闭</button>

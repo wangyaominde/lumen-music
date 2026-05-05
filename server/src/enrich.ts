@@ -363,7 +363,30 @@ export async function applyCandidate(trackId: number, c: Candidate): Promise<voi
     let albumId: number | null = null;
     const aaName = c.album_artist || c.artist;
     if (c.album && aaName) {
-      const ex = db.prepare('SELECT id FROM albums WHERE name = ? AND album_artist = ?').get(c.album, aaName) as { id: number } | undefined;
+      // Try strict match first.
+      let ex = db.prepare('SELECT id FROM albums WHERE name = ? AND album_artist = ?').get(c.album, aaName) as { id: number } | undefined;
+      if (!ex) {
+        // Forgiving match: same album name (case-insensitive, whitespace-collapsed)
+        // and an album_artist that's near-equal (handles 简繁 1-char diff and
+        // small variants like "Jay Chou" vs "Jay Chou feat. X" coming back from
+        // MB's per-recording artist credit). Without this, a single album gets
+        // split into multiple rows when MB returns slightly different
+        // album_artist strings for different tracks.
+        const candidates = db.prepare(
+          "SELECT id, album_artist FROM albums WHERE LOWER(REPLACE(name, ' ', '')) = LOWER(REPLACE(?, ' ', ''))"
+        ).all(c.album) as { id: number; album_artist: string }[];
+        for (const a of candidates) {
+          if (
+            a.album_artist === aaName ||
+            nearEqual(a.album_artist, aaName) ||
+            a.album_artist.toLowerCase().includes(aaName.toLowerCase()) ||
+            aaName.toLowerCase().includes(a.album_artist.toLowerCase())
+          ) {
+            ex = { id: a.id };
+            break;
+          }
+        }
+      }
       if (ex) albumId = ex.id;
       else {
         const r = db.prepare('INSERT INTO albums (name, album_artist, year, genre, added_at) VALUES (?, ?, ?, ?, ?)').run(c.album, aaName, c.year, c.genre, Date.now());

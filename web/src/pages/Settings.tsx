@@ -163,6 +163,8 @@ export function SettingsPage() {
 
       <EnrichmentSection />
 
+      <DuplicateCleanupSection />
+
       <UsersSection />
 
       <PasswordSection />
@@ -473,6 +475,57 @@ function FailuresList({ failures, totalFailed }: { failures: { path: string; err
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function DuplicateCleanupSection() {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ mergedAlbums: number; movedTracks: number; groups: number } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const run = async () => {
+    if (busy) return;
+    if (!confirm('扫描所有专辑找出名字相同 / 艺人接近的重复项，并把它们合并成一张。这个操作不可撤销，确定继续？')) return;
+    setBusy(true); setErr(null); setResult(null);
+    try {
+      const r = await api.cleanupDuplicateAlbums();
+      setResult({ mergedAlbums: r.mergedAlbums, movedTracks: r.movedTracks, groups: r.groups });
+      qc.invalidateQueries(); // refresh albums everywhere
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-6 mt-6">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-[15px] font-semibold">清理重复专辑</div>
+          <div className="text-[12px] mt-0.5" style={{ color: 'var(--color-fg-soft)' }}>
+            过去因为 ID3 简繁混排或刮削切换，可能把一张专辑拆成了多个。这里一键合并：保留曲目最多的那张，其它并入它。
+          </div>
+        </div>
+        <button
+          onClick={run}
+          disabled={busy}
+          className="px-4 py-2 rounded-full border border-white/15 hover:bg-white/[0.05] transition text-[13px] disabled:opacity-50"
+        >
+          {busy ? '清理中…' : '开始清理'}
+        </button>
+      </div>
+      {result && (
+        <div className="text-[12px]" style={{ color: 'var(--color-fg-soft)' }}>
+          {result.groups === 0
+            ? <>没有发现重复专辑。</>
+            : <>合并了 <b className="text-white">{result.groups}</b> 组，共 <b className="text-white">{result.mergedAlbums}</b> 张专辑被并入主专辑，<b className="text-white">{result.movedTracks}</b> 首曲目重新归位。</>
+          }
+        </div>
+      )}
+      {err && <div className="text-[12px] text-red-400 mt-2">{err}</div>}
     </div>
   );
 }

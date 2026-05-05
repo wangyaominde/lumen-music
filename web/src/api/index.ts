@@ -92,8 +92,11 @@ export const api = {
       skipped: number;
       noMatch: number;
       failed: number;
+      consolidated: number;
       results: Array<{ track_id: number; title: string; status: 'applied' | 'skipped' | 'no-match' | 'failed'; chosen?: Candidate; topScore?: number }>;
     }>(`/api/enrich/album/${albumId}`, opts),
+  cleanupDuplicateAlbums: () =>
+    jpost<{ mergedAlbums: number; movedTracks: number; groups: number; report: Array<{ kept: { id: number; name: string; album_artist: string }; merged: number[] }> }>('/api/enrich/cleanup-duplicates', {}),
 
   authStatus: () => jget<AuthStatus>('/api/auth/status'),
   authSetup: (pin: string, username = 'admin') => jpost<{ ok: true; user: User }>('/api/auth/setup', { pin, username }),
