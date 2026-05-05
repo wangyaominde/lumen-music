@@ -17,7 +17,8 @@ import { SettingsPage } from './pages/Settings';
 import { LoginPage } from './pages/Login';
 import { useAuth } from './store/auth';
 import { api, setUnauthorizedHandler } from './api';
-import { audio } from './store/player';
+import { audio, usePlayer } from './store/player';
+import { useUI } from './store/ui';
 
 export function App() {
   const phase = useAuth(s => s.phase);
@@ -45,6 +46,45 @@ export function App() {
     });
     return () => setUnauthorizedHandler(null);
   }, [setPhase]);
+
+  // Global keyboard shortcuts:
+  //   Space            play / pause
+  //   ←  /  →          previous / next track
+  //   Esc              close Now Playing (if open)
+  // Skipped while typing in inputs / textareas / contenteditable surfaces, and
+  // while focus is on a slider (so progress / volume range still work).
+  useEffect(() => {
+    if (phase !== 'authenticated') return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t) {
+        const tag = t.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (t.isContentEditable) return;
+      }
+      // ignore if any modifier is pressed (so e.g. Cmd+R reloads etc.)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      const player = usePlayer.getState();
+      const ui = useUI.getState();
+
+      if (e.key === ' ') {
+        e.preventDefault();
+        player.toggle();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        player.next();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        player.prev();
+      } else if (e.key === 'Escape' && ui.nowPlayingOpen) {
+        e.preventDefault();
+        ui.setNowPlaying(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [phase]);
 
   if (phase === 'loading') {
     return (

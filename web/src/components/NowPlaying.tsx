@@ -67,17 +67,7 @@ export function NowPlaying() {
     return () => { cancelled = true; };
   }, [track?.id]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-      if (e.key === ' ') { e.preventDefault(); toggle(); }
-      if (e.key === 'ArrowRight') next();
-      if (e.key === 'ArrowLeft') prev();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, toggle, next, prev, setOpen]);
+  // (Global keyboard shortcuts now live in App.tsx so they work on every page.)
 
   const lrcIdx = useMemo(() => (lrc ? activeLrcIndex(lrc, currentTime + 0.15) : -1), [lrc, currentTime]);
 

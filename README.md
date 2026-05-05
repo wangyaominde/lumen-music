@@ -218,34 +218,6 @@ cd server && npm rebuild better-sqlite3
 
 ---
 
-## 贡献
-
-PR / Issue 欢迎。代码风格：
-
-- TypeScript strict，注释只在 _why_ 不明显时写
-- 提交信息保持简洁，无表情符
-- 后端跑 `pnpm --filter @lumen/server build`，前端跑 `pnpm --filter @lumen/web build`，两边都过 `tsc` 才提交
-
-PR 会触发 [CI](./.github/workflows/ci.yml)：跑两端的 typecheck + build + 服务器冷启动健康检查。
-
-## 发布流程
-
-打 tag 触发自动构建：
-
-```bash
-git tag v0.1.0
-git push --tags
-```
-
-[Release workflow](./.github/workflows/release.yml) 会在 4 个目标平台并行构建 production bundle 并附到 Release：
-
-- `linux-x64`, `linux-arm64`
-- `darwin-arm64`, `darwin-x64`
-
-每个产物附带 `.sha256` 校验和。Tag 名带 `-rc` / `-beta` / `-alpha` 会自动标记为 pre-release。
-
----
-
 ## License
 
 MIT — see [LICENSE](./LICENSE).
