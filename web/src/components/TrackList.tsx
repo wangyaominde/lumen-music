@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Track } from '../api/types';
 import { fmtDuration, qualityLabel } from '../lib/format';
 import { usePlayer } from '../store/player';
+import { useAuth } from '../store/auth';
 import { PlayIcon } from './icons';
 import { EqBars } from './EqBars';
 import { EnrichDialog } from './EnrichDialog';
@@ -22,14 +23,21 @@ const SPARKLE = (
 export function TrackList({ tracks, showAlbum, numberByIndex }: Props) {
   const playQueue = usePlayer(s => s.playQueue);
   const currentTrackId = usePlayer(s => s.queue[s.index]?.id);
+  const isAdmin = useAuth(s => s.user?.role === 'admin');
   const [enrichingId, setEnrichingId] = useState<number | null>(null);
 
   // Two grid templates: one tight for mobile (no quality / album columns),
-  // one full for >=md.
-  const mobileCols = 'grid-cols-[28px_minmax(0,1fr)_44px_28px]';
-  const desktopCols = showAlbum
-    ? 'md:grid-cols-[40px_minmax(0,2fr)_minmax(0,1.4fr)_84px_60px_36px]'
-    : 'md:grid-cols-[40px_minmax(0,1fr)_84px_60px_36px]';
+  // one full for >=md. Listeners drop the trailing scrape column entirely.
+  const mobileCols = isAdmin
+    ? 'grid-cols-[28px_minmax(0,1fr)_44px_28px]'
+    : 'grid-cols-[28px_minmax(0,1fr)_44px]';
+  const desktopCols = isAdmin
+    ? (showAlbum
+      ? 'md:grid-cols-[40px_minmax(0,2fr)_minmax(0,1.4fr)_84px_60px_36px]'
+      : 'md:grid-cols-[40px_minmax(0,1fr)_84px_60px_36px]')
+    : (showAlbum
+      ? 'md:grid-cols-[40px_minmax(0,2fr)_minmax(0,1.4fr)_84px_60px]'
+      : 'md:grid-cols-[40px_minmax(0,1fr)_84px_60px]');
 
   return (
     <>
@@ -43,7 +51,7 @@ export function TrackList({ tracks, showAlbum, numberByIndex }: Props) {
           {showAlbum && <span>专辑</span>}
           <span>质量</span>
           <span>时长</span>
-          <span />
+          {isAdmin && <span />}
         </div>
         {tracks.map((t, i) => {
           const active = t.id === currentTrackId;
@@ -88,19 +96,21 @@ export function TrackList({ tracks, showAlbum, numberByIndex }: Props) {
                 {qualityLabel({ lossless: t.lossless, codec: t.codec, bitrate: t.bitrate, bit_depth: t.bit_depth, sample_rate: t.sample_rate })}
               </div>
               <div className="text-[11px] md:text-[12px] tabular-nums text-right md:text-left" style={{ color: 'var(--color-fg-soft)' }}>{fmtDuration(t.duration ?? 0)}</div>
-              <button
-                className="btn-icon w-7 h-7 opacity-60 md:opacity-50 hover:opacity-100"
-                onClick={(e) => { e.stopPropagation(); setEnrichingId(t.id); }}
-                aria-label="刮削此曲"
-                title="刮削此曲：从 MusicBrainz / 网易云查找候选"
-              >
-                {SPARKLE}
-              </button>
+              {isAdmin && (
+                <button
+                  className="btn-icon w-7 h-7 opacity-60 md:opacity-50 hover:opacity-100"
+                  onClick={(e) => { e.stopPropagation(); setEnrichingId(t.id); }}
+                  aria-label="刮削此曲"
+                  title="刮削此曲：从 MusicBrainz / 网易云查找候选"
+                >
+                  {SPARKLE}
+                </button>
+              )}
             </div>
           );
         })}
       </div>
-      <EnrichDialog trackId={enrichingId} onClose={() => setEnrichingId(null)} />
+      {isAdmin && <EnrichDialog trackId={enrichingId} onClose={() => setEnrichingId(null)} />}
     </>
   );
 }
