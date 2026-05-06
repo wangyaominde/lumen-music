@@ -110,13 +110,16 @@ export function NowPlaying() {
           </div>
 
           {/* Top bar */}
-          <div className="flex items-center justify-between px-6 py-5 relative z-10">
+          <div
+            className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 relative z-10"
+            style={{ paddingTop: 'calc(env(safe-area-inset-top) + 16px)' }}
+          >
             <button onClick={() => setOpen(false)} className="btn-icon w-10 h-10" aria-label="收起">
               <ChevronDown width={20} height={20} />
             </button>
-            <div className="text-center">
+            <div className="text-center min-w-0 px-2">
               <div className="text-[11px] uppercase tracking-[0.2em]" style={{ color: 'rgba(255,255,255,0.6)' }}>正在播放</div>
-              <div className="text-[13px] mt-0.5">{track.album_name}</div>
+              <div className="text-[13px] mt-0.5 truncate">{track.album_name}</div>
             </div>
             <button onClick={toggleQueue} className="btn-icon w-10 h-10" aria-label="队列">
               <ListIcon width={20} height={20} />
@@ -124,7 +127,10 @@ export function NowPlaying() {
           </div>
 
           {/* Body */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_440px] gap-12 px-12 pb-12 h-[calc(100%-72px)]">
+          <div
+            className="grid grid-cols-1 lg:grid-cols-[1fr_440px] gap-6 lg:gap-12 px-4 sm:px-8 lg:px-12 pb-6 lg:pb-12 overflow-y-auto"
+            style={{ height: 'calc(100% - 72px)', paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' }}
+          >
             <div className="flex flex-col items-center justify-center min-h-0">
               <motion.div
                 key={track.id}
@@ -139,26 +145,26 @@ export function NowPlaying() {
                   albumId={track.album_id}
                   hasCover={true}
                   alt={track.album_name}
-                  className="w-[min(38vh,360px)] h-[min(38vh,360px)]"
+                  className="w-[min(70vw,38vh,360px)] h-[min(70vw,38vh,360px)]"
                   rounded="rounded-2xl"
                 />
               </motion.div>
 
-              <div className="mt-8 w-full max-w-[640px] text-center">
+              <div className="mt-6 sm:mt-8 w-full max-w-[640px] text-center">
                 <motion.div
                   key={`title-${track.id}`}
                   initial={{ y: 8, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ duration: 0.45 }}
-                  className="text-[28px] font-semibold tracking-tight"
+                  className="text-[22px] sm:text-[28px] font-semibold tracking-tight"
                 >
                   {track.title}
                 </motion.div>
-                <div className="mt-1 text-[15px]" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                <div className="mt-1 text-[13px] sm:text-[15px]" style={{ color: 'rgba(255,255,255,0.75)' }}>
                   {track.artist_name} · {track.album_name}
                 </div>
 
-                <div className="mt-7 flex items-center gap-3">
+                <div className="mt-5 sm:mt-7 flex items-center gap-3">
                   <span className="text-[11px] tabular-nums w-10 text-right" style={{ color: 'rgba(255,255,255,0.7)' }}>{fmtDuration(currentTime)}</span>
                   <input
                     type="range"
@@ -173,15 +179,15 @@ export function NowPlaying() {
                   <span className="text-[11px] tabular-nums w-10" style={{ color: 'rgba(255,255,255,0.7)' }}>{fmtDuration(duration)}</span>
                 </div>
 
-                <div className="mt-5 flex items-center justify-center gap-2">
-                  <button className="btn-icon w-11 h-11" data-active={shuffle} onClick={toggleShuffle} aria-label="随机播放">
+                <div className="mt-4 sm:mt-5 flex items-center justify-center gap-1 sm:gap-2">
+                  <button className="btn-icon w-10 h-10 sm:w-11 sm:h-11" data-active={shuffle} onClick={toggleShuffle} aria-label="随机播放">
                     <ShuffleIcon width={18} height={18} />
                   </button>
-                  <button className="btn-icon w-12 h-12" onClick={prev} aria-label="上一首">
+                  <button className="btn-icon w-11 h-11 sm:w-12 sm:h-12" onClick={prev} aria-label="上一首">
                     <PrevIcon width={22} height={22} />
                   </button>
                   <button
-                    className="w-16 h-16 rounded-full grid place-items-center bg-white text-black hover:scale-105 active:scale-95 transition shadow-[0_18px_48px_rgba(0,0,0,0.45)]"
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full grid place-items-center bg-white text-black hover:scale-105 active:scale-95 transition shadow-[0_18px_48px_rgba(0,0,0,0.45)]"
                     onClick={toggle}
                     aria-label={isPlaying ? '暂停' : '播放'}
                   >
@@ -197,15 +203,15 @@ export function NowPlaying() {
                       </motion.span>
                     </AnimatePresence>
                   </button>
-                  <button className="btn-icon w-12 h-12" onClick={() => next()} aria-label="下一首">
+                  <button className="btn-icon w-11 h-11 sm:w-12 sm:h-12" onClick={() => next()} aria-label="下一首">
                     <NextIcon width={22} height={22} />
                   </button>
-                  <button className="btn-icon w-11 h-11" data-active={repeat !== 'off'} onClick={cycleRepeat} aria-label="循环">
+                  <button className="btn-icon w-10 h-10 sm:w-11 sm:h-11" data-active={repeat !== 'off'} onClick={cycleRepeat} aria-label="循环">
                     {repeat === 'one' ? <RepeatOneIcon width={18} height={18} /> : <RepeatIcon width={18} height={18} />}
                   </button>
                 </div>
 
-                <div className="mt-6 flex items-center justify-center gap-4 text-[12px]" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                <div className="mt-5 sm:mt-6 flex items-center justify-center flex-wrap gap-3 sm:gap-4 text-[12px]" style={{ color: 'rgba(255,255,255,0.7)' }}>
                   <span className="px-2.5 py-1 rounded-full border border-white/15">
                     {qualityLabel({ lossless: track.lossless, codec: track.codec, bitrate: track.bitrate, bit_depth: track.bit_depth, sample_rate: track.sample_rate })}
                   </span>
@@ -220,12 +226,12 @@ export function NowPlaying() {
                   >
                     <HeartIcon filled={favorited} width={18} height={18} />
                   </button>
-                  <button className="btn-icon w-9 h-9" onClick={toggleMute} aria-label={muted ? '取消静音' : '静音'}>
+                  <button className="btn-icon w-9 h-9 hidden sm:inline-flex" onClick={toggleMute} aria-label={muted ? '取消静音' : '静音'}>
                     {muted || volume === 0 ? <MuteIcon width={16} height={16} /> : <VolumeIcon width={16} height={16} />}
                   </button>
                   <input
                     type="range"
-                    className="range-slim w-28"
+                    className="range-slim w-28 hidden sm:inline-flex"
                     min={0}
                     max={1}
                     step={0.01}

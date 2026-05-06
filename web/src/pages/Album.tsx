@@ -62,7 +62,7 @@ export function AlbumPage() {
   }, [album?.id, album?.has_cover]);
 
   if (!album) {
-    return <div className="px-10 py-10"><div className="cover-shimmer h-[260px] rounded-2xl" /></div>;
+    return <div className="px-4 sm:px-6 md:px-10 py-6 md:py-10"><div className="cover-shimmer h-[260px] rounded-2xl" /></div>;
   }
 
   return (
@@ -77,19 +77,19 @@ export function AlbumPage() {
           background: `linear-gradient(180deg, ${rgba(palette.p, 0.55)} 0%, ${rgba(palette.s, 0.25)} 50%, transparent 100%)`
         } : { background: 'linear-gradient(180deg, rgba(80,60,140,0.4), transparent)' }}
       />
-      <div className="px-10 py-10">
-        <div className="flex gap-8 items-end mb-8">
+      <div className="px-4 sm:px-6 md:px-10 py-6 md:py-10">
+        <div className="flex flex-col sm:flex-row gap-5 sm:gap-8 sm:items-end mb-6 md:mb-8">
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
-            className="shrink-0"
+            className="shrink-0 self-center sm:self-end"
           >
             <Cover
               albumId={album.id}
               hasCover={album.has_cover}
               alt={album.name}
-              className="w-[240px] h-[240px] shadow-[0_24px_60px_rgba(0,0,0,0.5)]"
+              className="w-[180px] h-[180px] sm:w-[200px] sm:h-[200px] md:w-[240px] md:h-[240px] shadow-[0_24px_60px_rgba(0,0,0,0.5)]"
               rounded="rounded-xl"
             />
           </motion.div>
@@ -97,44 +97,44 @@ export function AlbumPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.05 }}
-            className="min-w-0 pb-2"
+            className="min-w-0 pb-1 sm:pb-2 text-center sm:text-left"
           >
             <div className="text-[12px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-fg-mute)' }}>专辑</div>
-            <h1 className="text-[40px] font-semibold tracking-tight leading-tight mt-1" title={album.name}>{album.name}</h1>
-            <div className="mt-3 text-[15px]" style={{ color: 'var(--color-fg-soft)' }}>
+            <h1 className="text-[26px] md:text-[40px] font-semibold tracking-tight leading-tight mt-1 break-words" title={album.name}>{album.name}</h1>
+            <div className="mt-2 md:mt-3 text-[14px] md:text-[15px]" style={{ color: 'var(--color-fg-soft)' }}>
               <span className="font-medium text-white">{album.album_artist}</span>
               {album.year ? <span> · {album.year}</span> : null}
               {album.genre ? <span> · {album.genre}</span> : null}
             </div>
-            <div className="text-[13px] mt-1" style={{ color: 'var(--color-fg-mute)' }}>
+            <div className="text-[12px] md:text-[13px] mt-1" style={{ color: 'var(--color-fg-mute)' }}>
               {tracks.length} 首 · {fmtLongDuration(album.duration ?? 0)}
             </div>
           </motion.div>
         </div>
 
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-2 md:gap-3 mb-5 md:mb-6 flex-wrap">
           <button
             onClick={() => playQueue(tracks)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black hover:scale-[1.02] active:scale-[0.98] transition shadow-md font-medium text-[14px]"
+            className="flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-white text-black hover:scale-[1.02] active:scale-[0.98] transition shadow-md font-medium text-[13px] md:text-[14px]"
           >
             <PlayIcon width={16} height={16} />播放
           </button>
           <button
             onClick={() => { if (!shuffle) toggleShuffle(); playQueue(tracks); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/15 hover:bg-white/[0.05] transition text-[14px]"
+            className="flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-full border border-white/15 hover:bg-white/[0.05] transition text-[13px] md:text-[14px]"
           >
             <ShuffleIcon width={16} height={16} />随机
           </button>
           <button
             onClick={() => enqueue(tracks)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/15 hover:bg-white/[0.05] transition text-[14px]"
+            className="flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-full border border-white/15 hover:bg-white/[0.05] transition text-[13px] md:text-[14px]"
           >
             <PlusIcon width={16} height={16} />加入队列
           </button>
           <button
             onClick={runScrape}
             disabled={scraping}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/15 hover:bg-white/[0.05] transition text-[14px] disabled:opacity-50"
+            className="flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-full border border-white/15 hover:bg-white/[0.05] transition text-[13px] md:text-[14px] disabled:opacity-50 ml-auto sm:ml-0"
             title="使用 MusicBrainz 自动刮削并填补缺失元数据"
           >
             <SparkleIcon />{scraping ? '刮削中…' : '刮削元数据'}

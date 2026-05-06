@@ -11,7 +11,7 @@ interface Props {
 export function AlbumGrid({ albums, loading }: Props) {
   if (loading) {
     return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 sm:gap-5">
         {Array.from({ length: 12 }).map((_, i) => (
           <div key={i}>
             <div className="cover-shimmer aspect-square rounded-[10px]" />
@@ -26,7 +26,7 @@ export function AlbumGrid({ albums, loading }: Props) {
     return <div className="text-sm py-12 text-center" style={{ color: 'var(--color-fg-mute)' }}>没有专辑。请先在“设置”中添加音乐目录并扫描。</div>;
   }
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-5">
+    <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 sm:gap-5">
       {albums.map((a, i) => (
         <motion.div
           key={a.id}

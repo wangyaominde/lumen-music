@@ -20,7 +20,7 @@ export function SettingsPage() {
   // Listeners only see "change my PIN" — no library / scan / scrape / users.
   if (!isAdmin) {
     return (
-      <div className="px-10 py-10 max-w-3xl">
+      <div className="px-4 sm:px-6 md:px-10 py-6 md:py-10 max-w-3xl">
         <div className="mb-8">
           <div className="text-[12px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-fg-mute)' }}>偏好</div>
           <h1 className="text-[28px] font-semibold mt-1">设置</h1>
@@ -67,14 +67,14 @@ export function SettingsPage() {
   const pct = status && status.total > 0 ? (status.scanned / status.total) * 100 : 0;
 
   return (
-    <div className="px-10 py-10 max-w-3xl">
-      <div className="mb-8">
+    <div className="px-4 sm:px-6 md:px-10 py-6 md:py-10 max-w-3xl">
+      <div className="mb-6 md:mb-8">
         <div className="text-[12px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-fg-mute)' }}>偏好</div>
-        <h1 className="text-[28px] font-semibold mt-1">设置</h1>
+        <h1 className="text-[24px] md:text-[28px] font-semibold mt-1">设置</h1>
       </div>
 
-      <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-6 mb-6">
-        <div className="flex items-center justify-between mb-4">
+      <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-4 md:p-6 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div>
             <div className="text-[15px] font-semibold">音乐库目录</div>
             <div className="text-[12px] mt-0.5" style={{ color: 'var(--color-fg-soft)' }}>添加目录后点击扫描，元数据将被解析并存入索引。</div>
@@ -82,7 +82,7 @@ export function SettingsPage() {
           <button
             onClick={() => runScan.mutate()}
             disabled={status?.running}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black text-[13px] font-medium disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black text-[13px] font-medium disabled:opacity-50 w-fit shrink-0"
           >
             <RefreshIcon width={14} height={14} />{status?.running ? '扫描中…' : '开始扫描'}
           </button>
@@ -96,9 +96,9 @@ export function SettingsPage() {
             value={path}
             onChange={e => setPath(e.target.value)}
             placeholder="/Users/you/Music 或 /Volumes/NAS/FLAC"
-            className="flex-1 bg-black/30 border border-white/5 px-4 py-2.5 rounded-lg outline-none focus:border-white/15 transition text-[14px] font-mono"
+            className="flex-1 min-w-0 bg-black/30 border border-white/5 px-3 sm:px-4 py-2.5 rounded-lg outline-none focus:border-white/15 transition text-[13px] sm:text-[14px] font-mono"
           />
-          <button className="px-4 py-2.5 rounded-lg border border-white/15 hover:bg-white/[0.05] transition text-[13px] flex items-center gap-2"><PlusIcon width={14} height={14} />添加</button>
+          <button className="px-3 sm:px-4 py-2.5 rounded-lg border border-white/15 hover:bg-white/[0.05] transition text-[13px] flex items-center gap-2 shrink-0"><PlusIcon width={14} height={14} />添加</button>
         </form>
 
         <div className="space-y-1">
@@ -125,7 +125,7 @@ export function SettingsPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="rounded-2xl bg-white/[0.025] border border-white/5 p-6"
+            className="rounded-2xl bg-white/[0.025] border border-white/5 p-4 md:p-6"
           >
             <div className="flex items-center justify-between mb-3">
               <div className="text-[15px] font-semibold">{status.running ? '正在扫描' : '扫描完成'}</div>
@@ -202,7 +202,7 @@ function PasswordSection() {
   };
 
   return (
-    <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-6 mt-6">
+    <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-4 md:p-6 mt-6">
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="text-[15px] font-semibold">访问密码</div>
@@ -211,7 +211,7 @@ function PasswordSection() {
           </div>
         </div>
       </div>
-      <form onSubmit={submit} className="grid grid-cols-3 gap-3 max-w-xl">
+      <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl">
         <input
           type="password" value={cur} onChange={e => setCur(e.target.value)} placeholder="当前密码"
           className="bg-black/30 border border-white/5 px-3 py-2 rounded-lg outline-none focus:border-white/15 transition text-[13px]"
@@ -226,7 +226,7 @@ function PasswordSection() {
         />
         <button
           type="submit" disabled={busy || !cur || !next || !next2}
-          className="col-span-3 mt-1 px-5 py-2 rounded-full bg-white text-black text-[13px] font-medium disabled:opacity-40 self-start w-fit"
+          className="sm:col-span-3 mt-1 px-5 py-2 rounded-full bg-white text-black text-[13px] font-medium disabled:opacity-40 self-start w-fit"
         >
           {busy ? '保存中…' : '修改密码'}
         </button>
@@ -263,8 +263,8 @@ function EnrichmentSection() {
   const pct = status && status.total > 0 ? (status.done / status.total) * 100 : 0;
 
   return (
-    <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-6 mt-6">
-      <div className="flex items-center justify-between mb-4">
+    <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-4 md:p-6 mt-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
           <div className="text-[15px] font-semibold flex items-center gap-2"><SparkleIcon />元数据增强</div>
           <div className="text-[12px] mt-0.5" style={{ color: 'var(--color-fg-soft)' }}>
@@ -274,7 +274,7 @@ function EnrichmentSection() {
         <button
           onClick={() => run.mutate()}
           disabled={status?.running}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black text-[13px] font-medium disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black text-[13px] font-medium disabled:opacity-50 w-fit shrink-0"
         >
           <SparkleIcon />{status?.running ? '增强中…' : '改善缺失元数据'}
         </button>
@@ -353,7 +353,7 @@ function UsersSection() {
   });
 
   return (
-    <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-6 mt-6">
+    <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-4 md:p-6 mt-6">
       <div className="mb-4">
         <div className="text-[15px] font-semibold">用户管理</div>
         <div className="text-[12px] mt-0.5" style={{ color: 'var(--color-fg-soft)' }}>
@@ -383,7 +383,7 @@ function UsersSection() {
               </div>
             </div>
             <button
-              className="text-[11px] px-2 py-1 rounded-full border border-white/10 hover:bg-white/[0.05] opacity-0 group-hover:opacity-100 transition"
+              className="text-[11px] px-2 py-1 rounded-full border border-white/10 hover:bg-white/[0.05] md:opacity-0 md:group-hover:opacity-100 transition shrink-0"
               onClick={() => {
                 const pin = prompt(`为「${u.username}」重置 PIN（4-12 位数字 / 字符）：`);
                 if (pin && pin.trim()) reset.mutate({ id: u.id, pin: pin.trim() });
@@ -393,7 +393,7 @@ function UsersSection() {
             </button>
             {me?.id !== u.id && (
               <button
-                className="btn-icon w-8 h-8 opacity-0 group-hover:opacity-100"
+                className="btn-icon w-8 h-8 md:opacity-0 md:group-hover:opacity-100 shrink-0"
                 onClick={() => { if (confirm(`删除用户「${u.username}」？`)) del.mutate(u.id); }}
                 aria-label="删除"
               >
@@ -407,20 +407,20 @@ function UsersSection() {
       <div className="border-t border-white/5 pt-4">
         <div className="text-[12px] mb-2" style={{ color: 'var(--color-fg-soft)' }}>新建用户</div>
         <form
-          className="flex gap-2 flex-wrap"
+          className="grid grid-cols-1 sm:flex sm:flex-wrap gap-2"
           onSubmit={(e) => { e.preventDefault(); if (newName.trim() && newPin) create.mutate(); }}
         >
           <input
             value={newName}
             onChange={e => setNewName(e.target.value)}
             placeholder="用户名（如 妈妈）"
-            className="bg-black/30 border border-white/5 px-3 py-2 rounded-lg outline-none focus:border-white/15 text-[13px] w-40"
+            className="bg-black/30 border border-white/5 px-3 py-2 rounded-lg outline-none focus:border-white/15 text-[13px] w-full sm:w-40"
           />
           <input
             value={newPin}
             onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
             placeholder="PIN（数字）"
-            className="bg-black/30 border border-white/5 px-3 py-2 rounded-lg outline-none focus:border-white/15 text-[13px] w-40 font-mono"
+            className="bg-black/30 border border-white/5 px-3 py-2 rounded-lg outline-none focus:border-white/15 text-[13px] w-full sm:w-40 font-mono"
             inputMode="numeric"
           />
           <select
@@ -501,8 +501,8 @@ function DuplicateCleanupSection() {
   };
 
   return (
-    <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-6 mt-6">
-      <div className="flex items-center justify-between mb-3">
+    <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-4 md:p-6 mt-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
         <div>
           <div className="text-[15px] font-semibold">清理重复专辑</div>
           <div className="text-[12px] mt-0.5" style={{ color: 'var(--color-fg-soft)' }}>
@@ -512,7 +512,7 @@ function DuplicateCleanupSection() {
         <button
           onClick={run}
           disabled={busy}
-          className="px-4 py-2 rounded-full border border-white/15 hover:bg-white/[0.05] transition text-[13px] disabled:opacity-50"
+          className="px-4 py-2 rounded-full border border-white/15 hover:bg-white/[0.05] transition text-[13px] disabled:opacity-50 w-fit shrink-0"
         >
           {busy ? '清理中…' : '开始清理'}
         </button>

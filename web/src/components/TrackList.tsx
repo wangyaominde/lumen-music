@@ -24,15 +24,20 @@ export function TrackList({ tracks, showAlbum, numberByIndex }: Props) {
   const currentTrackId = usePlayer(s => s.queue[s.index]?.id);
   const [enrichingId, setEnrichingId] = useState<number | null>(null);
 
-  const cols = showAlbum
-    ? 'grid-cols-[40px_minmax(0,2fr)_minmax(0,1.4fr)_84px_60px_36px]'
-    : 'grid-cols-[40px_minmax(0,1fr)_84px_60px_36px]';
+  // Two grid templates: one tight for mobile (no quality / album columns),
+  // one full for >=md.
+  const mobileCols = 'grid-cols-[28px_minmax(0,1fr)_44px_28px]';
+  const desktopCols = showAlbum
+    ? 'md:grid-cols-[40px_minmax(0,2fr)_minmax(0,1.4fr)_84px_60px_36px]'
+    : 'md:grid-cols-[40px_minmax(0,1fr)_84px_60px_36px]';
 
   return (
     <>
       <div className="text-sm">
-        <div className={`grid ${cols} gap-3 px-3 py-2 text-[11px] uppercase tracking-[0.16em] border-b border-white/5`}
-             style={{ color: 'var(--color-fg-mute)' }}>
+        <div
+          className={`hidden md:grid ${desktopCols} gap-3 px-3 py-2 text-[11px] uppercase tracking-[0.16em] border-b border-white/5`}
+          style={{ color: 'var(--color-fg-mute)' }}
+        >
           <span className="text-right">#</span>
           <span>标题</span>
           {showAlbum && <span>专辑</span>}
@@ -45,7 +50,7 @@ export function TrackList({ tracks, showAlbum, numberByIndex }: Props) {
           return (
             <div
               key={t.id}
-              className={`grid ${cols} gap-3 px-3 py-2 row-hover rounded-md group cursor-pointer items-center`}
+              className={`grid ${mobileCols} ${desktopCols} gap-2 md:gap-3 px-2 md:px-3 py-2 row-hover rounded-md group cursor-pointer items-center`}
               onDoubleClick={() => playQueue(tracks, i)}
               onClick={(e) => {
                 if ((e.target as HTMLElement).closest('button, a')) return;
@@ -53,7 +58,7 @@ export function TrackList({ tracks, showAlbum, numberByIndex }: Props) {
               }}
             >
               <div className="text-right tabular-nums relative" style={{ color: active ? 'var(--color-accent)' : 'var(--color-fg-mute)' }}>
-                <span className="group-hover:hidden">
+                <span className="md:group-hover:hidden">
                   {active ? (
                     <EqBars className="ml-auto" color="var(--color-accent)" height={12} bands={4} />
                   ) : (
@@ -61,7 +66,7 @@ export function TrackList({ tracks, showAlbum, numberByIndex }: Props) {
                   )}
                 </span>
                 <button
-                  className="hidden group-hover:inline-flex w-6 h-6 items-center justify-center rounded-full text-white"
+                  className="hidden md:group-hover:inline-flex w-6 h-6 items-center justify-center rounded-full text-white"
                   onClick={(e) => { e.stopPropagation(); playQueue(tracks, i); }}
                   aria-label="播放"
                 >
@@ -70,17 +75,21 @@ export function TrackList({ tracks, showAlbum, numberByIndex }: Props) {
               </div>
               <div className="min-w-0">
                 <div className={`truncate ${active ? 'text-[var(--color-accent)]' : ''}`}>{t.title}</div>
-                <div className="text-[12px] truncate" style={{ color: 'var(--color-fg-soft)' }}>{t.artist_name}</div>
+                <div className="text-[12px] truncate" style={{ color: 'var(--color-fg-soft)' }}>
+                  {t.artist_name}
+                  {/* Album name folded into the subtitle on mobile when showAlbum is requested */}
+                  {showAlbum && <span className="md:hidden"> · {t.album_name}</span>}
+                </div>
               </div>
               {showAlbum && (
-                <div className="text-[12px] truncate" style={{ color: 'var(--color-fg-soft)' }}>{t.album_name}</div>
+                <div className="hidden md:block text-[12px] truncate" style={{ color: 'var(--color-fg-soft)' }}>{t.album_name}</div>
               )}
-              <div className="text-[11px]" style={{ color: 'var(--color-fg-soft)' }}>
+              <div className="hidden md:block text-[11px]" style={{ color: 'var(--color-fg-soft)' }}>
                 {qualityLabel({ lossless: t.lossless, codec: t.codec, bitrate: t.bitrate, bit_depth: t.bit_depth, sample_rate: t.sample_rate })}
               </div>
-              <div className="text-[12px] tabular-nums" style={{ color: 'var(--color-fg-soft)' }}>{fmtDuration(t.duration ?? 0)}</div>
+              <div className="text-[11px] md:text-[12px] tabular-nums text-right md:text-left" style={{ color: 'var(--color-fg-soft)' }}>{fmtDuration(t.duration ?? 0)}</div>
               <button
-                className="btn-icon w-7 h-7 opacity-50 hover:opacity-100"
+                className="btn-icon w-7 h-7 opacity-60 md:opacity-50 hover:opacity-100"
                 onClick={(e) => { e.stopPropagation(); setEnrichingId(t.id); }}
                 aria-label="刮削此曲"
                 title="刮削此曲：从 MusicBrainz / 网易云查找候选"

@@ -74,17 +74,17 @@ export function EnrichDialog({ trackId, onClose }: Props) {
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.96, y: 12, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-            className="relative w-[min(880px,92vw)] max-h-[82vh] flex flex-col glass rounded-2xl border border-white/10 shadow-[0_36px_120px_rgba(0,0,0,0.55)]"
+            className="relative w-[min(880px,94vw)] max-h-[88vh] sm:max-h-[82vh] flex flex-col glass rounded-2xl border border-white/10 shadow-[0_36px_120px_rgba(0,0,0,0.55)]"
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-              <div>
+            <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-white/5 gap-2">
+              <div className="min-w-0">
                 <div className="text-[12px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-fg-mute)' }}>改善元数据</div>
-                <div className="text-[16px] font-semibold mt-0.5">{cur ? `${cur.artist_name} – ${cur.title}` : ''}</div>
+                <div className="text-[14px] sm:text-[16px] font-semibold mt-0.5 truncate">{cur ? `${cur.artist_name} – ${cur.title}` : ''}</div>
               </div>
-              <button className="btn-icon w-9 h-9" onClick={onClose} aria-label="关闭"><CloseIcon width={16} height={16} /></button>
+              <button className="btn-icon w-9 h-9 shrink-0" onClick={onClose} aria-label="关闭"><CloseIcon width={16} height={16} /></button>
             </div>
-            <div className="px-6 py-4 border-b border-white/5">
-              <div className="grid grid-cols-4 gap-x-4 gap-y-2 text-[12px]">
+            <div className="px-4 sm:px-6 py-4 border-b border-white/5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-[12px]">
                 <Field label="标题" value={cur?.title} />
                 <Field label="艺术家" value={cur?.artist_name} />
                 <Field label="专辑" value={cur?.album_name} />
@@ -105,7 +105,7 @@ export function EnrichDialog({ trackId, onClose }: Props) {
                   <button
                     key={`${c.source}:${c.external_id}:${i}`}
                     onClick={() => setPicked(i)}
-                    className={`w-full text-left grid grid-cols-[80px_1fr_auto] gap-3 px-4 py-3 rounded-xl transition mb-1 ${
+                    className={`w-full text-left grid grid-cols-[64px_1fr_auto] sm:grid-cols-[80px_1fr_auto] gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-xl transition mb-1 ${
                       active ? 'bg-white/[0.07] ring-1 ring-white/20' : 'hover:bg-white/[0.04]'
                     }`}
                   >
@@ -123,9 +123,9 @@ export function EnrichDialog({ trackId, onClose }: Props) {
                         {c.artist || '—'} · {c.album || '—'}{c.year ? ` · ${c.year}` : ''}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                       {c.cover_url && (
-                        <img src={c.cover_url} alt="" className="w-10 h-10 rounded-md object-cover bg-white/5" referrerPolicy="no-referrer" />
+                        <img src={c.cover_url} alt="" className="hidden sm:block w-10 h-10 rounded-md object-cover bg-white/5" referrerPolicy="no-referrer" />
                       )}
                       <ScoreBar value={c.score} />
                     </div>
@@ -133,7 +133,7 @@ export function EnrichDialog({ trackId, onClose }: Props) {
                 );
               })}
             </div>
-            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-white/5">
+            <div className="flex items-center justify-end gap-2 px-4 sm:px-6 py-3 sm:py-4 border-t border-white/5">
               <button onClick={onClose} className="px-4 py-2 rounded-full text-[13px] border border-white/10 hover:bg-white/[0.04]">取消</button>
               <button
                 onClick={apply}

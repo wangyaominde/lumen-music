@@ -9,18 +9,18 @@ export function ArtistsPage() {
   const { data } = useQuery({ queryKey: ['artists', sort], queryFn: () => api.artists(sort) });
 
   return (
-    <div className="px-10 py-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="px-4 sm:px-6 md:px-10 py-6 md:py-8">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>
           <div className="text-[12px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-fg-mute)' }}>音乐库</div>
-          <h1 className="text-[28px] font-semibold mt-1">艺术家 <span className="text-[16px] font-normal ml-2" style={{ color: 'var(--color-fg-mute)' }}>{(data ?? []).length.toLocaleString()}</span></h1>
+          <h1 className="text-[24px] md:text-[28px] font-semibold mt-1">艺术家 <span className="text-[14px] md:text-[16px] font-normal ml-2" style={{ color: 'var(--color-fg-mute)' }}>{(data ?? []).length.toLocaleString()}</span></h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {([['name','名称'],['albums','专辑数'],['tracks','曲目数']] as const).map(([v, l]) => (
             <button
               key={v}
               onClick={() => setSort(v)}
-              className={`text-[12px] px-3 py-1.5 rounded-full border transition ${
+              className={`text-[12px] px-3 py-1.5 rounded-full border transition shrink-0 ${
                 sort === v ? 'border-white/40 text-white bg-white/[0.06]' : 'border-transparent text-[var(--color-fg-soft)] hover:text-white hover:bg-white/[0.04]'
               }`}
             >
@@ -29,7 +29,7 @@ export function ArtistsPage() {
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
         {(data ?? []).map((a, i) => (
           <motion.div
             key={a.id}
