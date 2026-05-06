@@ -28,8 +28,8 @@ export function SearchPage() {
   const empty = useMemo(() => !data || (data.tracks.length + data.albums.length + data.artists.length === 0), [data]);
 
   return (
-    <div className="px-10 py-8">
-      <div className="flex items-center gap-3 mb-8 max-w-xl rounded-2xl px-4 py-3 bg-white/[0.04] border border-white/5 focus-within:border-white/15 transition">
+    <div className="px-4 sm:px-6 md:px-10 py-6 md:py-8">
+      <div className="flex items-center gap-3 mb-6 md:mb-8 max-w-xl rounded-2xl px-4 py-3 bg-white/[0.04] border border-white/5 focus-within:border-white/15 transition">
         <SearchIcon width={18} height={18} style={{ color: 'var(--color-fg-mute)' }} />
         <input
           autoFocus
@@ -44,7 +44,7 @@ export function SearchPage() {
 
       {data && data.artists.length > 0 && (
         <Section title="艺术家">
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
             {data.artists.map(a => (
               <Link key={a.id} to={`/artists/${a.id}`} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.025] border border-white/5 hover:bg-white/[0.05]">
                 <div className="w-10 h-10 rounded-full grid place-items-center text-[14px] font-semibold"
@@ -63,7 +63,7 @@ export function SearchPage() {
 
       {data && data.albums.length > 0 && (
         <Section title="专辑">
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 sm:gap-5">
             {data.albums.map((a, i) => (
               <motion.div key={a.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.015 }}>
                 <Link to={`/albums/${a.id}`} className="group block">
@@ -90,8 +90,8 @@ export function SearchPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mb-10">
-      <h2 className="text-xl font-semibold mb-4">{title}</h2>
+    <div className="mb-8 md:mb-10">
+      <h2 className="text-lg md:text-xl font-semibold mb-3 md:mb-4">{title}</h2>
       {children}
     </div>
   );

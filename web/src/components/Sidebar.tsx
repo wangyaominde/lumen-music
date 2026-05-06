@@ -1,10 +1,12 @@
-import { NavLink } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { useEffect } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlbumIcon, ArtistIcon, HeartIcon, HomeIcon, ListIcon, SearchIcon, SettingsIcon } from './icons';
+import { AlbumIcon, ArtistIcon, CloseIcon, HeartIcon, HomeIcon, ListIcon, SearchIcon, SettingsIcon } from './icons';
 import { api } from '../api';
 import { useAuth } from '../store/auth';
 import { audio, usePlayer } from '../store/player';
+import { useUI } from '../store/ui';
 
 const LogoutIcon = () => (
   <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -30,6 +32,14 @@ export function Sidebar() {
   const user = useAuth(s => s.user);
   const clearQueue = usePlayer(s => s.clearQueue);
   const qc = useQueryClient();
+  const mobileOpen = useUI(s => s.mobileNavOpen);
+  const setMobileOpen = useUI(s => s.setMobileNavOpen);
+  const location = useLocation();
+
+  // Auto-close drawer when navigating on mobile.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname, setMobileOpen]);
 
   const logout = async () => {
     if (!confirm('确认退出登录？')) return;
@@ -41,9 +51,9 @@ export function Sidebar() {
     setPhase('login');
   };
 
-  return (
-    <aside className="w-60 shrink-0 flex flex-col h-full glass border-r border-white/5">
-      <div className="px-5 pt-6 pb-4 select-none">
+  const inner = (
+    <>
+      <div className="px-5 pt-6 pb-4 select-none flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <motion.div
             className="w-8 h-8 rounded-full"
@@ -59,6 +69,13 @@ export function Sidebar() {
             <div className="text-[11px] uppercase tracking-[0.18em] text-fg-mute" style={{ color: 'var(--color-fg-mute)' }}>无损音乐</div>
           </div>
         </div>
+        <button
+          className="btn-icon w-9 h-9 md:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-label="关闭导航"
+        >
+          <CloseIcon width={16} height={16} />
+        </button>
       </div>
       <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
         {items.map(({ to, label, icon: Icon, end }) => (
@@ -67,7 +84,7 @@ export function Sidebar() {
             to={to}
             end={end}
             className={({ isActive }) =>
-              `relative flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] transition-colors ${
+              `relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] transition-colors ${
                 isActive
                   ? 'text-white bg-white/[0.06]'
                   : 'text-[var(--color-fg-soft)] hover:text-white hover:bg-white/[0.03]'
@@ -120,6 +137,43 @@ export function Sidebar() {
           v0.1 · 偏好无损 FLAC / WAV / ALAC
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop / tablet: persistent sidebar */}
+      <aside className="hidden md:flex w-60 shrink-0 flex-col h-full glass border-r border-white/5">
+        {inner}
+      </aside>
+
+      {/* Mobile: drawer + backdrop */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            <motion.div
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm md:hidden"
+              onClick={() => setMobileOpen(false)}
+            />
+            <motion.aside
+              key="drawer"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'tween', duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+              className="fixed left-0 top-0 bottom-0 z-50 w-[78%] max-w-[280px] flex flex-col glass border-r border-white/5 md:hidden"
+              style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+            >
+              {inner}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

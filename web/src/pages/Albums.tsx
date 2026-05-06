@@ -25,18 +25,18 @@ export function AlbumsPage() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="px-10 py-8">
-      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-6">
+    <div className="px-4 sm:px-6 md:px-10 py-6 md:py-8">
+      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>
           <div className="text-[12px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-fg-mute)' }}>音乐库</div>
-          <h1 className="text-[28px] font-semibold mt-1">专辑 <span className="text-[16px] font-normal ml-2" style={{ color: 'var(--color-fg-mute)' }}>{total.toLocaleString()}</span></h1>
+          <h1 className="text-[24px] md:text-[28px] font-semibold mt-1">专辑 <span className="text-[14px] md:text-[16px] font-normal ml-2" style={{ color: 'var(--color-fg-mute)' }}>{total.toLocaleString()}</span></h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap -mx-1 overflow-x-auto md:overflow-visible">
           {SORTS.map(s => (
             <button
               key={s.value}
               onClick={() => { setSort(s.value); setPage(1); }}
-              className={`text-[12px] px-3 py-1.5 rounded-full border transition ${
+              className={`text-[12px] px-3 py-1.5 rounded-full border transition shrink-0 ${
                 sort === s.value
                   ? 'border-white/40 text-white bg-white/[0.06]'
                   : 'border-transparent text-[var(--color-fg-soft)] hover:text-white hover:bg-white/[0.04]'

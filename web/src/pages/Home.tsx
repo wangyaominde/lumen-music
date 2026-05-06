@@ -43,20 +43,20 @@ export function HomePage() {
   const pct = enrichSt && enrichSt.total > 0 ? (enrichSt.done / enrichSt.total) * 100 : 0;
 
   return (
-    <div className="px-10 py-8">
+    <div className="px-4 sm:px-6 md:px-10 py-6 md:py-8">
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="mb-8 flex items-end justify-between gap-6"
+        className="mb-6 md:mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4 md:gap-6"
       >
         <div>
           <div className="text-[12px] uppercase tracking-[0.2em] mb-2" style={{ color: 'var(--color-fg-mute)' }}>
             欢迎回来
           </div>
-          <h1 className="text-[34px] font-semibold tracking-tight">尽情聆听吧</h1>
+          <h1 className="text-[26px] md:text-[34px] font-semibold tracking-tight">尽情聆听吧</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-[12px] cursor-pointer select-none" style={{ color: 'var(--color-fg-soft)' }}>
             <input
               type="checkbox"
@@ -69,7 +69,7 @@ export function HomePage() {
           <button
             onClick={() => runEnrich.mutate()}
             disabled={enrichSt?.running}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black hover:scale-[1.02] active:scale-[0.98] transition shadow-md font-medium text-[14px] disabled:opacity-50 disabled:hover:scale-100"
+            className="flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-white text-black hover:scale-[1.02] active:scale-[0.98] transition shadow-md font-medium text-[13px] md:text-[14px] disabled:opacity-50 disabled:hover:scale-100"
           >
             <SparkleIcon size={16} />{enrichSt?.running ? '刮削中…' : '一键刮削整库'}
           </button>
@@ -107,7 +107,7 @@ export function HomePage() {
       </AnimatePresence>
 
       {stats && (
-        <div className="grid grid-cols-4 gap-4 mb-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8 md:mb-10">
           <Stat label="曲目" value={stats.tracks.toLocaleString()} />
           <Stat label="专辑" value={stats.albums.toLocaleString()} />
           <Stat label="艺术家" value={stats.artists.toLocaleString()} />
@@ -116,10 +116,10 @@ export function HomePage() {
       )}
 
       <div className="flex items-baseline justify-between mb-4">
-        <h2 className="text-xl font-semibold">最近添加</h2>
+        <h2 className="text-lg md:text-xl font-semibold">最近添加</h2>
         <Link to="/albums" className="text-[12px] hover:underline" style={{ color: 'var(--color-fg-soft)' }}>查看全部</Link>
       </div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 sm:gap-5">
         {(recent ?? []).map((a, i) => (
           <motion.div
             key={a.id}
@@ -143,10 +143,10 @@ export function HomePage() {
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-2xl p-5 bg-white/[0.025] border border-white/5">
+    <div className="rounded-2xl p-4 md:p-5 bg-white/[0.025] border border-white/5">
       <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--color-fg-mute)' }}>{label}</div>
-      <div className="text-[28px] font-semibold mt-1 tabular-nums">{value}</div>
-      {sub && <div className="text-[12px] mt-1" style={{ color: 'var(--color-fg-soft)' }}>{sub}</div>}
+      <div className="text-[22px] md:text-[28px] font-semibold mt-1 tabular-nums">{value}</div>
+      {sub && <div className="text-[12px] mt-1 truncate" style={{ color: 'var(--color-fg-soft)' }}>{sub}</div>}
     </div>
   );
 }

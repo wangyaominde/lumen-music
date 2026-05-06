@@ -455,17 +455,17 @@ export function LoginPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.25 }}
-              className="text-[26px] font-semibold tracking-[0.06em]"
+              className="text-[22px] sm:text-[26px] font-semibold tracking-[0.06em]"
             >
               {heading}
             </motion.h1>
           </AnimatePresence>
-          <p className="text-[13px] mt-2 max-w-md mx-auto" style={{ color: 'rgba(255,255,255,0.55)' }}>{subtitle}</p>
+          <p className="text-[13px] mt-2 max-w-md mx-auto px-4" style={{ color: 'rgba(255,255,255,0.55)' }}>{subtitle}</p>
         </motion.div>
 
         <div
           ref={groupRef}
-          className={`otp-group relative flex gap-3 ${errored ? 'error' : ''} ${success ? 'success' : ''} ${success ? 'otp-locked' : ''}`}
+          className={`otp-group relative flex gap-2 sm:gap-3 px-3 sm:px-0 ${errored ? 'error' : ''} ${success ? 'success' : ''} ${success ? 'otp-locked' : ''}`}
         >
           {digits.map((d, i) => (
             <input

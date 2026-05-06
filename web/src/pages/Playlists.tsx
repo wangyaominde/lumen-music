@@ -23,25 +23,25 @@ export function PlaylistsPage() {
   });
 
   return (
-    <div className="px-10 py-10">
-      <div className="mb-8">
+    <div className="px-4 sm:px-6 md:px-10 py-6 md:py-10">
+      <div className="mb-6 md:mb-8">
         <div className="text-[12px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-fg-mute)' }}>音乐库</div>
-        <h1 className="text-[28px] font-semibold mt-1">播放列表</h1>
+        <h1 className="text-[24px] md:text-[28px] font-semibold mt-1">播放列表</h1>
       </div>
       <form
-        className="flex items-center gap-3 mb-8 max-w-md"
+        className="flex items-center gap-2 md:gap-3 mb-6 md:mb-8 max-w-md"
         onSubmit={(e) => { e.preventDefault(); if (name.trim()) { create.mutate(name.trim()); setName(''); } }}
       >
         <input
           value={name}
           onChange={e => setName(e.target.value)}
           placeholder="新建播放列表..."
-          className="flex-1 bg-white/[0.04] border border-white/5 px-4 py-2.5 rounded-full outline-none focus:border-white/15 transition text-[14px]"
+          className="flex-1 min-w-0 bg-white/[0.04] border border-white/5 px-4 py-2.5 rounded-full outline-none focus:border-white/15 transition text-[14px]"
         />
-        <button className="px-5 py-2.5 rounded-full bg-white text-black text-[14px] font-medium flex items-center gap-2"><PlusIcon width={14} height={14} />创建</button>
+        <button className="shrink-0 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-white text-black text-[13px] md:text-[14px] font-medium flex items-center gap-2"><PlusIcon width={14} height={14} />创建</button>
       </form>
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
         {(data ?? []).map((p, i) => (
           <motion.div
             key={p.id}
@@ -61,7 +61,7 @@ export function PlaylistsPage() {
               </div>
             </Link>
             <button
-              className="btn-icon w-8 h-8 opacity-0 group-hover:opacity-100"
+              className="btn-icon w-8 h-8 md:opacity-0 md:group-hover:opacity-100"
               onClick={() => { if (confirm('删除该播放列表？')) del.mutate(p.id); }}
               aria-label="删除"
             >
@@ -80,14 +80,14 @@ export function PlaylistDetailPage() {
   const { data } = useQuery({ queryKey: ['playlist', pid], queryFn: () => api.playlist(pid), enabled: !!pid });
   const playQueue = usePlayer(s => s.playQueue);
 
-  if (!data) return <div className="px-10 py-10"><div className="cover-shimmer h-[160px] rounded-2xl" /></div>;
+  if (!data) return <div className="px-4 sm:px-6 md:px-10 py-6 md:py-10"><div className="cover-shimmer h-[160px] rounded-2xl" /></div>;
   const tracks = data.tracks as any[];
   return (
-    <div className="px-10 py-10">
-      <div className="flex items-end justify-between mb-8">
-        <div>
+    <div className="px-4 sm:px-6 md:px-10 py-6 md:py-10">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 md:mb-8">
+        <div className="min-w-0">
           <div className="text-[12px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-fg-mute)' }}>播放列表</div>
-          <h1 className="text-[34px] font-semibold mt-1">{data.playlist.name}</h1>
+          <h1 className="text-[26px] md:text-[34px] font-semibold mt-1 truncate">{data.playlist.name}</h1>
           <div className="text-[13px] mt-1" style={{ color: 'var(--color-fg-soft)' }}>
             {tracks.length} 首 · {fmtLongDuration(tracks.reduce((s, t) => s + (t.duration ?? 0), 0))}
           </div>
@@ -95,7 +95,7 @@ export function PlaylistDetailPage() {
         {tracks.length > 0 && (
           <button
             onClick={() => playQueue(tracks)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black hover:scale-[1.02] active:scale-[0.98] transition shadow-md font-medium text-[14px]"
+            className="flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-white text-black hover:scale-[1.02] active:scale-[0.98] transition shadow-md font-medium text-[13px] md:text-[14px] w-fit"
           >
             <PlayIcon width={16} height={16} />播放
           </button>

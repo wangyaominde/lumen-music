@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar';
 import { PlayerBar } from './components/PlayerBar';
 import { NowPlaying } from './components/NowPlaying';
 import { QueuePanel } from './components/QueuePanel';
+import { MobileTopBar } from './components/MobileTopBar';
 import { HomePage } from './pages/Home';
 import { AlbumsPage } from './pages/Albums';
 import { AlbumPage } from './pages/Album';
@@ -107,7 +108,8 @@ function Shell() {
     <div className="h-full w-full flex flex-col">
       <div className="flex-1 flex min-h-0 relative">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto relative">
+        <main className="flex-1 overflow-y-auto relative min-w-0">
+          <MobileTopBar />
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

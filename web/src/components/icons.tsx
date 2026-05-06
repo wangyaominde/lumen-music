@@ -79,6 +79,9 @@ export const QueueIcon = (p: P) => (
 export const CloseIcon = (p: P) => (
   <svg {...base} {...p}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
 );
+export const MenuIcon = (p: P) => (
+  <svg {...base} {...p}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+);
 export const HiResBadge = ({ className }: { className?: string }) => (
   <span className={className}>Hi-Res</span>
 );
