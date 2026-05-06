@@ -49,7 +49,26 @@ let analyser: AnalyserNode | null = null;
 let mediaSource: MediaElementAudioSourceNode | null = null;
 let freqData: Uint8Array<ArrayBuffer> | null = null;
 
+/**
+ * Mobile browsers (iOS Safari especially) suspend the AudioContext when the
+ * tab goes to background or the phone locks. Once `createMediaElementSource`
+ * has rerouted our <audio> through that context, suspension means silence —
+ * defeating the whole point of the lock-screen MediaSession controls.
+ *
+ * On those platforms we skip the analyser entirely. The audio element plays
+ * straight to the speakers and the OS happily keeps it going in background.
+ * The eq-bars visualizer just stays at its idle scale on mobile, which is a
+ * fair trade for working background playback.
+ */
+const isMobile = (() => {
+  if (typeof navigator === 'undefined') return false;
+  if (/iPhone|iPad|iPod|Android|Mobile|Tablet|Silk|Kindle/i.test(navigator.userAgent)) return true;
+  // iPadOS reports as Mac in the UA but has touch
+  return navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.userAgent);
+})();
+
 export function ensureAudioGraph() {
+  if (isMobile) return; // see comment above
   if (audioCtx) {
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
     return;
@@ -358,7 +377,39 @@ if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('pause', () => usePlayer.getState().toggle());
   navigator.mediaSession.setActionHandler('previoustrack', () => usePlayer.getState().prev());
   navigator.mediaSession.setActionHandler('nexttrack', () => usePlayer.getState().next());
+  try {
+    navigator.mediaSession.setActionHandler('seekto', (details: any) => {
+      if (typeof details?.seekTime === 'number') usePlayer.getState().seek(details.seekTime);
+    });
+    navigator.mediaSession.setActionHandler('seekbackward', (details: any) => {
+      const offset = typeof details?.seekOffset === 'number' ? details.seekOffset : 10;
+      audio.currentTime = Math.max(0, audio.currentTime - offset);
+    });
+    navigator.mediaSession.setActionHandler('seekforward', (details: any) => {
+      const offset = typeof details?.seekOffset === 'number' ? details.seekOffset : 10;
+      audio.currentTime = Math.min(audio.duration || Infinity, audio.currentTime + offset);
+    });
+  } catch { /* older browsers without these handlers */ }
 }
+
+// Keep the lock-screen progress bar in sync. Throttle the call: spec says it's
+// fine to call once per second; calling on every timeupdate is wasteful.
+let lastPositionUpdate = 0;
+audio.addEventListener('timeupdate', () => {
+  if (!('mediaSession' in navigator) || typeof navigator.mediaSession.setPositionState !== 'function') return;
+  const now = performance.now();
+  if (now - lastPositionUpdate < 750) return;
+  lastPositionUpdate = now;
+  const dur = audio.duration;
+  if (!Number.isFinite(dur) || dur <= 0) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: dur,
+      playbackRate: audio.playbackRate || 1,
+      position: Math.min(audio.currentTime, dur)
+    });
+  } catch { /* */ }
+});
 
 export function currentTrack(): Track | null {
   const s = usePlayer.getState();
