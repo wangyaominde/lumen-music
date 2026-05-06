@@ -9,6 +9,7 @@ import { fmtLongDuration } from '../lib/format';
 import { usePlayer } from '../store/player';
 import { extractPalette, rgba } from '../lib/color';
 import { PlayIcon, PlusIcon, ShuffleIcon } from '../components/icons';
+import { useAuth } from '../store/auth';
 
 const SparkleIcon = () => (
   <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -21,6 +22,7 @@ export function AlbumPage() {
   const { id } = useParams();
   const albumId = Number(id);
   const qc = useQueryClient();
+  const isAdmin = useAuth(s => s.user?.role === 'admin');
   const { data } = useQuery({ queryKey: ['album', albumId], queryFn: () => api.album(albumId), enabled: !!albumId });
   const playQueue = usePlayer(s => s.playQueue);
   const enqueue = usePlayer(s => s.enqueue);
@@ -131,18 +133,20 @@ export function AlbumPage() {
           >
             <PlusIcon width={16} height={16} />加入队列
           </button>
-          <button
-            onClick={runScrape}
-            disabled={scraping}
-            className="flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-full border border-white/15 hover:bg-white/[0.05] transition text-[13px] md:text-[14px] disabled:opacity-50 ml-auto sm:ml-0"
-            title="使用 MusicBrainz 自动刮削并填补缺失元数据"
-          >
-            <SparkleIcon />{scraping ? '刮削中…' : '刮削元数据'}
-          </button>
+          {isAdmin && (
+            <button
+              onClick={runScrape}
+              disabled={scraping}
+              className="flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-full border border-white/15 hover:bg-white/[0.05] transition text-[13px] md:text-[14px] disabled:opacity-50 ml-auto sm:ml-0"
+              title="使用 MusicBrainz 自动刮削并填补缺失元数据"
+            >
+              <SparkleIcon />{scraping ? '刮削中…' : '刮削元数据'}
+            </button>
+          )}
         </div>
 
         <AnimatePresence>
-          {scrapeResult && (
+          {isAdmin && scrapeResult && (
             <motion.div
               initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
               className="mb-5 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-between text-[13px]"

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../api';
 import { Cover } from '../components/Cover';
 import { fmtLongDuration } from '../lib/format';
+import { useAuth } from '../store/auth';
 
 const SparkleIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -15,6 +16,7 @@ const SparkleIcon = ({ size = 16 }: { size?: number }) => (
 
 export function HomePage() {
   const qc = useQueryClient();
+  const isAdmin = useAuth(s => s.user?.role === 'admin');
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.stats });
   const { data: recent } = useQuery({ queryKey: ['recent-albums'], queryFn: api.recentAlbums });
   const [onlyWeak, setOnlyWeak] = useState(true);
@@ -22,7 +24,8 @@ export function HomePage() {
   const { data: enrichSt } = useQuery({
     queryKey: ['enrich-status'],
     queryFn: api.enrichStatus,
-    refetchInterval: (q) => (q.state.data?.running ? 800 : false)
+    refetchInterval: (q) => (q.state.data?.running ? 800 : false),
+    enabled: isAdmin
   });
 
   const runEnrich = useMutation({
@@ -56,28 +59,30 @@ export function HomePage() {
           </div>
           <h1 className="text-[26px] md:text-[34px] font-semibold tracking-tight">尽情聆听吧</h1>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-[12px] cursor-pointer select-none" style={{ color: 'var(--color-fg-soft)' }}>
-            <input
-              type="checkbox"
-              className="accent-[var(--color-accent)]"
-              checked={onlyWeak}
-              onChange={e => setOnlyWeak(e.target.checked)}
-            />
-            仅刮缺失元数据
-          </label>
-          <button
-            onClick={() => runEnrich.mutate()}
-            disabled={enrichSt?.running}
-            className="flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-white text-black hover:scale-[1.02] active:scale-[0.98] transition shadow-md font-medium text-[13px] md:text-[14px] disabled:opacity-50 disabled:hover:scale-100"
-          >
-            <SparkleIcon size={16} />{enrichSt?.running ? '刮削中…' : '一键刮削整库'}
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-[12px] cursor-pointer select-none" style={{ color: 'var(--color-fg-soft)' }}>
+              <input
+                type="checkbox"
+                className="accent-[var(--color-accent)]"
+                checked={onlyWeak}
+                onChange={e => setOnlyWeak(e.target.checked)}
+              />
+              仅刮缺失元数据
+            </label>
+            <button
+              onClick={() => runEnrich.mutate()}
+              disabled={enrichSt?.running}
+              className="flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-white text-black hover:scale-[1.02] active:scale-[0.98] transition shadow-md font-medium text-[13px] md:text-[14px] disabled:opacity-50 disabled:hover:scale-100"
+            >
+              <SparkleIcon size={16} />{enrichSt?.running ? '刮削中…' : '一键刮削整库'}
+            </button>
+          </div>
+        )}
       </motion.div>
 
       <AnimatePresence>
-        {enrichSt && (enrichSt.running || enrichSt.finishedAt) && (
+        {isAdmin && enrichSt && (enrichSt.running || enrichSt.finishedAt) && (
           <motion.div
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="rounded-2xl bg-white/[0.025] border border-white/5 p-4 mb-8"
