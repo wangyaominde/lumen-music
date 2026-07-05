@@ -98,6 +98,8 @@ export const api = {
   cleanupDuplicateAlbums: () =>
     jpost<{ mergedAlbums: number; movedTracks: number; groups: number; report: Array<{ kept: { id: number; name: string; album_artist: string }; merged: number[] }> }>('/api/enrich/cleanup-duplicates', {}),
 
+  getConfig: () => jget<{ transcoding: boolean }>('/api/config'),
+
   authStatus: () => jget<AuthStatus>('/api/auth/status'),
   authSetup: (pin: string, username = 'admin') => jpost<{ ok: true; user: User }>('/api/auth/setup', { pin, username }),
   authLogin: (pin: string) => jpost<{ ok: true; user: User }>('/api/auth/login', { pin }),
@@ -114,8 +116,18 @@ export const api = {
   deleteUser: (id: number) => jdel<{ ok: true }>(`/api/users/${id}`)
 };
 
-export const coverUrl = (albumId: number | null | undefined, has?: number | boolean) =>
-  albumId && has ? `/api/cover/album/${albumId}` : '';
+export type CoverSize = 96 | 320 | 800;
 
-export const trackCoverUrl = (trackId: number) => `/api/cover/track/${trackId}`;
-export const streamUrl = (trackId: number) => `/api/stream/${trackId}`;
+export const coverUrl = (albumId: number | null | undefined, has?: number | boolean, size?: CoverSize) =>
+  albumId && has ? `/api/cover/album/${albumId}${size ? `?size=${size}` : ''}` : '';
+
+export const trackCoverUrl = (trackId: number, size?: CoverSize) =>
+  `/api/cover/track/${trackId}${size ? `?size=${size}` : ''}`;
+
+export const streamUrl = (trackId: number, opts?: { quality?: 'aac256' | 'aac128'; t?: number }) => {
+  const params = new URLSearchParams();
+  if (opts?.quality) params.set('quality', opts.quality);
+  if (opts?.t) params.set('t', String(opts.t));
+  const qs = params.toString();
+  return `/api/stream/${trackId}${qs ? `?${qs}` : ''}`;
+};

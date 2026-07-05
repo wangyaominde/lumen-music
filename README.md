@@ -25,7 +25,10 @@
 
 ### 播放体验
 - HTTP Range 流式播放，浏览器拖进度条秒到位
-- **Web Audio AnalyserNode 真实频谱可视化**（fftSize=64，单实例 + rAF 直绘 DOM，资源消耗近乎零）
+- **弱网转码**：装有 ffmpeg 时可按需转 AAC 256k/128k 推流（设置 → 音质），手机蜂窝网络听无损不再卡顿；没装 ffmpeg 自动回退原文件直传
+- **断网自愈**：蜂窝掉线（隧道 / 地库）自动按 1→2→4→8→15s 退避重试，网络恢复瞬间续播，从断点继续
+- **下一首预取**：临近曲尾预热下一首的首个分片（Chromium），切歌近乎无缝
+- **Web Audio AnalyserNode 真实频谱可视化**（fftSize=64，单实例 + rAF 直绘 DOM，资源消耗近乎零；移动端自动绕过 Web Audio 以保证锁屏后台播放）
 - 全屏 Now Playing：从专辑封面提取主色 → 双径向渐变 + 模糊大图背景，**真实**支持同步歌词（本地 `.lrc` 文件 / NetEase 严格匹配回退）
 - 媒体键支持（macOS 触控栏 / OS 通知中心）
 - 播放队列、随机、单曲循环、列表循环
@@ -119,6 +122,7 @@ cd server && npm rebuild better-sqlite3
 | `PORT` | `4477` | 监听端口 |
 | `HOST` | `0.0.0.0` | 绑定地址 |
 | `LUMEN_DATA_DIR` | `./data` | SQLite 数据库 + 封面图存放位置 |
+| `LUMEN_FFMPEG` | (PATH 探测) | ffmpeg 可执行文件路径；找到即启用 AAC 转码与封面缩图，找不到自动禁用 |
 | `NODE_ENV` | (unset) | `production` 时 cookie `Secure` 标志启用，HTTPS 反代后必设 |
 
 ---
@@ -129,6 +133,7 @@ cd server && npm rebuild better-sqlite3
 |---|---|
 | `data/library.db` | 曲目 / 专辑 / 艺人 / 播放列表 / 收藏 / 用户 (PIN 哈希 + 角色) / session |
 | `data/covers/` | 提取或刮取的专辑封面（按 `sha1(album_name + album_artist)` 命名）|
+| `data/cache/covers/` | 按需生成的封面缩图（96/320/800px），可随时整目录删除 |
 
 仅 `data/` 需要持久化备份。丢了不会丢源文件，但要重新扫描 + 重设 PIN。
 

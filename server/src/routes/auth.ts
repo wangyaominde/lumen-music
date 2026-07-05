@@ -56,7 +56,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(429).send({ error: '请稍后再试', retryAfterMs: throttle.retryAfterMs });
     }
     const pin = String(req.body?.pin ?? '');
-    const user = findUserByPin(pin);
+    const user = await findUserByPin(pin);
     if (!user) {
       loginAttemptFailed(ip);
       return reply.code(401).send({ error: 'PIN 错误' });
@@ -81,7 +81,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const cur = String(req.body?.current ?? '');
     const nxt = String(req.body?.next ?? '');
     // Verify current PIN belongs to current user
-    const user = findUserByPin(cur);
+    const user = await findUserByPin(cur);
     if (!user || user.id !== me.id) return reply.code(401).send({ error: '当前 PIN 错误' });
     try {
       setUserPin(me.id, nxt);

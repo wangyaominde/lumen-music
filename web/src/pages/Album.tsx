@@ -91,6 +91,9 @@ export function AlbumPage() {
               albumId={album.id}
               hasCover={album.has_cover}
               alt={album.name}
+              // Hero renders up to 240 CSS px ≈ 480+ physical px on 2x DPR —
+              // the 320 default would be visibly upscaled here.
+              size={800}
               className="w-[180px] h-[180px] sm:w-[200px] sm:h-[200px] md:w-[240px] md:h-[240px] shadow-[0_24px_60px_rgba(0,0,0,0.5)]"
               rounded="rounded-xl"
             />

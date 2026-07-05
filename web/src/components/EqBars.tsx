@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { getFrequencyBands, usePlayer } from '../store/player';
+import { getFrequencyBands, hasAnalyser, usePlayer } from '../store/player';
 
 interface Props {
   bands?: number;
@@ -15,6 +15,10 @@ interface Props {
  * Real-time analyser-driven equalizer. Mutates DOM via rAF without
  * re-rendering React. Costs ~ O(fftSize) per frame; one shared
  * AudioContext + AnalyserNode regardless of how many instances.
+ *
+ * Without an analyser (mobile skips Web Audio so background playback keeps
+ * working) the loop would animate zeros forever — we render the CSS-animated
+ * `.eq` bars instead, which cost nothing on the main thread.
  */
 export function EqBars({
   bands = 4,
@@ -27,8 +31,12 @@ export function EqBars({
   // Subscribe so we pause rAF when not playing — saves frames.
   const isPlaying = usePlayer(s => s.isPlaying);
   const trackId = usePlayer(s => s.queue[s.index]?.id);
+  // Not reactive, but the isPlaying subscription re-renders us right after
+  // playback starts, which is when the lazy audio graph gets built.
+  const analyserReady = hasAnalyser();
 
   useEffect(() => {
+    if (!analyserReady) return;
     const wrap = wrapRef.current;
     if (!wrap) return;
     const spans = Array.from(wrap.querySelectorAll<HTMLSpanElement>('span'));
@@ -38,6 +46,7 @@ export function EqBars({
 
     const tick = () => {
       if (!active) return;
+      if (document.hidden) { raf = 0; return; } // resumed by visibilitychange
       const data = isPlaying ? getFrequencyBands(bands) : null;
       for (let i = 0; i < spans.length; i++) {
         const target = data ? Math.max(idle, data[i]) : idle;
@@ -47,12 +56,27 @@ export function EqBars({
       }
       raf = requestAnimationFrame(tick);
     };
+    const onVisibility = () => {
+      if (!document.hidden && active && raf === 0) tick();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
     tick();
     return () => {
       active = false;
       cancelAnimationFrame(raf);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [bands, idle, isPlaying, trackId]);
+  }, [bands, idle, isPlaying, trackId, analyserReady]);
+
+  if (!analyserReady) {
+    return (
+      <span className={`eq ${className}`} style={{ height, color }} aria-hidden>
+        {Array.from({ length: bands }).map((_, i) => (
+          <span key={i} style={{ animationPlayState: isPlaying ? 'running' : 'paused' }} />
+        ))}
+      </span>
+    );
+  }
 
   return (
     <span

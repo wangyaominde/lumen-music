@@ -27,7 +27,8 @@ export const playlistRoutes: FastifyPluginAsync = async (app) => {
     if (!pl) return reply.code(404).send();
     const tracks = db.prepare(`
       SELECT t.id, t.title, t.artist_name, t.album_name, t.album_id,
-             t.duration, t.lossless, pt.position, pt.id AS pt_id
+             t.duration, t.lossless, pt.position, pt.id AS pt_id,
+             transcodable(t.path) AS transcodable
       FROM playlist_tracks pt JOIN tracks t ON t.id = pt.track_id
       WHERE pt.playlist_id = ? ORDER BY pt.position
     `).all(id);

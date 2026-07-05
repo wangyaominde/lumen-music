@@ -1,9 +1,45 @@
+import { memo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { Track } from '../api/types';
 import { usePlayer } from '../store/player';
 import { useUI } from '../store/ui';
 import { fmtDuration } from '../lib/format';
 import { Cover } from './Cover';
 import { CloseIcon, TrashIcon } from './icons';
+
+interface RowProps {
+  track: Track;
+  index: number;
+  active: boolean;
+  onPlay: (index: number) => void;
+  onRemove: (index: number) => void;
+}
+
+// Memo'd so switching tracks only re-renders the rows whose highlight flips.
+const QueueRow = memo(function QueueRow({ track: t, index: i, active, onPlay, onRemove }: RowProps) {
+  return (
+    <button
+      className={`group w-full flex items-center gap-3 px-2 py-2 rounded-lg row-hover text-left cv-auto ${
+        active ? 'bg-white/[0.06]' : ''
+      }`}
+      onClick={() => onPlay(i)}
+    >
+      <Cover albumId={t.album_id} hasCover={true} size={96} className="w-10 h-10 shrink-0" rounded="rounded-md" />
+      <div className="min-w-0 flex-1">
+        <div className={`text-[13px] truncate ${active ? 'text-[var(--color-accent)]' : ''}`}>{t.title}</div>
+        <div className="text-[11px] truncate" style={{ color: 'var(--color-fg-soft)' }}>{t.artist_name}</div>
+      </div>
+      <div className="text-[11px] tabular-nums shrink-0" style={{ color: 'var(--color-fg-mute)' }}>{fmtDuration(t.duration ?? 0)}</div>
+      <button
+        className="btn-icon w-7 h-7 md:opacity-0 md:group-hover:opacity-100 shrink-0"
+        onClick={(e) => { e.stopPropagation(); onRemove(i); }}
+        aria-label="移除"
+      >
+        <CloseIcon width={12} height={12} />
+      </button>
+    </button>
+  );
+});
 
 export function QueuePanel() {
   const open = useUI(s => s.queueOpen);
@@ -13,6 +49,8 @@ export function QueuePanel() {
   const playQueue = usePlayer(s => s.playQueue);
   const removeAt = usePlayer(s => s.removeAt);
   const clearQueue = usePlayer(s => s.clearQueue);
+
+  const onPlay = useCallback((i: number) => playQueue(queue, i), [playQueue, queue]);
 
   return (
     <AnimatePresence>
@@ -61,27 +99,14 @@ export function QueuePanel() {
                 <div className="px-4 py-8 text-sm text-center" style={{ color: 'var(--color-fg-mute)' }}>队列为空</div>
               )}
               {queue.map((t, i) => (
-                <button
+                <QueueRow
                   key={`${t.id}-${i}`}
-                  className={`group w-full flex items-center gap-3 px-2 py-2 rounded-lg row-hover text-left ${
-                    i === index ? 'bg-white/[0.06]' : ''
-                  }`}
-                  onClick={() => playQueue(queue, i)}
-                >
-                  <Cover albumId={t.album_id} hasCover={true} className="w-10 h-10 shrink-0" rounded="rounded-md" />
-                  <div className="min-w-0 flex-1">
-                    <div className={`text-[13px] truncate ${i === index ? 'text-[var(--color-accent)]' : ''}`}>{t.title}</div>
-                    <div className="text-[11px] truncate" style={{ color: 'var(--color-fg-soft)' }}>{t.artist_name}</div>
-                  </div>
-                  <div className="text-[11px] tabular-nums shrink-0" style={{ color: 'var(--color-fg-mute)' }}>{fmtDuration(t.duration ?? 0)}</div>
-                  <button
-                    className="btn-icon w-7 h-7 md:opacity-0 md:group-hover:opacity-100 shrink-0"
-                    onClick={(e) => { e.stopPropagation(); removeAt(i); }}
-                    aria-label="移除"
-                  >
-                    <CloseIcon width={12} height={12} />
-                  </button>
-                </button>
+                  track={t}
+                  index={i}
+                  active={i === index}
+                  onPlay={onPlay}
+                  onRemove={removeAt}
+                />
               ))}
             </div>
           </motion.aside>

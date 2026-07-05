@@ -1,5 +1,13 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import { db } from './db.js';
+
+const scryptAsync = promisify(scrypt) as (
+  password: string,
+  salt: Buffer,
+  keylen: number,
+  options: { N: number; r: number; p: number }
+) => Promise<Buffer>;
 
 const SCRYPT_N = 1 << 14;
 const SCRYPT_R = 8;
@@ -27,15 +35,42 @@ export function hashPassword(password: string): string {
   return `scrypt:${SCRYPT_N}:${SCRYPT_R}:${SCRYPT_P}:${salt.toString('hex')}:${key.toString('hex')}`;
 }
 
-export function verifyPassword(password: string, stored: string): boolean {
+function parseStoredHash(stored: string): { N: number; r: number; p: number; salt: Buffer; expected: Buffer } | null {
   try {
     const [scheme, nStr, rStr, pStr, saltHex, keyHex] = stored.split(':');
-    if (scheme !== 'scrypt') return false;
-    const N = Number(nStr), r = Number(rStr), p = Number(pStr);
-    const salt = Buffer.from(saltHex, 'hex');
-    const expected = Buffer.from(keyHex, 'hex');
-    const got = scryptSync(password, salt, expected.length, { N, r, p });
-    return got.length === expected.length && timingSafeEqual(got, expected);
+    if (scheme !== 'scrypt') return null;
+    return {
+      N: Number(nStr),
+      r: Number(rStr),
+      p: Number(pStr),
+      salt: Buffer.from(saltHex, 'hex'),
+      expected: Buffer.from(keyHex, 'hex')
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function verifyPassword(password: string, stored: string): boolean {
+  const parsed = parseStoredHash(stored);
+  if (!parsed) return false;
+  try {
+    const got = scryptSync(password, parsed.salt, parsed.expected.length, { N: parsed.N, r: parsed.r, p: parsed.p });
+    return got.length === parsed.expected.length && timingSafeEqual(got, parsed.expected);
+  } catch {
+    return false;
+  }
+}
+
+// Login-path variant: scrypt runs on the libuv threadpool instead of blocking
+// the event loop (~35ms per user with the sync version — enough to stutter
+// concurrent audio streaming while someone logs in).
+export async function verifyPasswordAsync(password: string, stored: string): Promise<boolean> {
+  const parsed = parseStoredHash(stored);
+  if (!parsed) return false;
+  try {
+    const got = await scryptAsync(password, parsed.salt, parsed.expected.length, { N: parsed.N, r: parsed.r, p: parsed.p });
+    return got.length === parsed.expected.length && timingSafeEqual(got, parsed.expected);
   } catch {
     return false;
   }
@@ -66,13 +101,34 @@ export function userCount(): number {
 /**
  * Find which user a PIN belongs to. Iterates all users and timing-safe verifies
  * against each. With personal-scale user bases (< 100) this is fine — ~50ms per
- * scrypt verify. For larger bases we'd add a cheap deterministic index.
+ * scrypt verify, off the event loop. For larger bases we'd add a cheap
+ * deterministic index.
  *
  * Iterating in random order would give better timing-attack resistance, but
  * since each verify is constant-time and we always finish the loop, the
  * observable timing is roughly the same regardless of which user matched.
  */
-export function findUserByPin(pin: string): User | null {
+export async function findUserByPin(pin: string): Promise<User | null> {
+  if (!pin) return null;
+  const rows = db.prepare(
+    'SELECT id, username, role, password_hash, created_at, updated_at FROM users'
+  ).all() as Array<User & { password_hash: string }>;
+  let match: User | null = null;
+  for (const r of rows) {
+    const ok = await verifyPasswordAsync(pin, r.password_hash);
+    if (ok && !match) {
+      const { password_hash: _, ...u } = r;
+      match = u;
+      // keep iterating to even out timing
+    }
+  }
+  return match;
+}
+
+// Blocking twin of findUserByPin for the rare synchronous admin paths below
+// (PIN-collision checks on user creation / PIN change); login must use the
+// async findUserByPin.
+function findUserByPinSync(pin: string): User | null {
   if (!pin) return null;
   const rows = db.prepare(
     'SELECT id, username, role, password_hash, created_at, updated_at FROM users'
@@ -83,7 +139,6 @@ export function findUserByPin(pin: string): User | null {
     if (ok && !match) {
       const { password_hash: _, ...u } = r;
       match = u;
-      // keep iterating to even out timing
     }
   }
   return match;
@@ -94,7 +149,7 @@ export function createUser(username: string, pin: string, role: Role): User {
   if (username.length < 1 || username.length > 32) throw new Error('用户名长度需在 1-32 之间');
   if (userByUsername(username)) throw new Error('该用户名已存在');
   // Collisions of PINs are not allowed — login lookup is by PIN alone.
-  if (findUserByPin(pin)) throw new Error('该 PIN 已被使用，请换一个');
+  if (findUserByPinSync(pin)) throw new Error('该 PIN 已被使用，请换一个');
   const hash = hashPassword(pin);
   const now = Date.now();
   const r = db.prepare(
@@ -105,7 +160,7 @@ export function createUser(username: string, pin: string, role: Role): User {
 
 export function setUserPin(userId: number, pin: string) {
   // Make sure the new PIN doesn't collide with any other user.
-  const existing = findUserByPin(pin);
+  const existing = findUserByPinSync(pin);
   if (existing && existing.id !== userId) throw new Error('该 PIN 已被使用，请换一个');
   const hash = hashPassword(pin);
   db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(hash, Date.now(), userId);

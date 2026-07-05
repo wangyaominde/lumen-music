@@ -59,7 +59,8 @@ export const libraryRoutes: FastifyPluginAsync = async (app) => {
     const tracks = db.prepare(`
       SELECT id, title, artist_name, album_id, album_name, album_artist,
              track_no, disc_no, duration, codec, lossless,
-             sample_rate, bit_depth, bitrate, file_size
+             sample_rate, bit_depth, bitrate, file_size,
+             transcodable(path) AS transcodable
       FROM tracks WHERE album_id = ?
       ORDER BY COALESCE(disc_no, 1), COALESCE(track_no, 9999), title
     `).all(id);
@@ -94,7 +95,8 @@ export const libraryRoutes: FastifyPluginAsync = async (app) => {
     `).all(artist.name, id);
     const topTracks = db.prepare(`
       SELECT t.id, t.title, t.duration, t.album_id, t.album_name,
-             (a.cover_path IS NOT NULL) AS has_cover
+             (a.cover_path IS NOT NULL) AS has_cover,
+             transcodable(t.path) AS transcodable
       FROM tracks t LEFT JOIN albums a ON a.id = t.album_id
       WHERE t.artist_id = ? OR t.album_artist = ?
       ORDER BY t.scanned_at DESC LIMIT 10
@@ -105,7 +107,8 @@ export const libraryRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { id: string } }>('/api/tracks/:id', async (req, reply) => {
     const id = Number(req.params.id);
     const track = db.prepare(`
-      SELECT t.*, (a.cover_path IS NOT NULL) AS has_cover
+      SELECT t.*, (a.cover_path IS NOT NULL) AS has_cover,
+             transcodable(t.path) AS transcodable
       FROM tracks t LEFT JOIN albums a ON a.id = t.album_id
       WHERE t.id = ?
     `).get(id);
@@ -119,7 +122,8 @@ export const libraryRoutes: FastifyPluginAsync = async (app) => {
     const pat = `%${q}%`;
     return {
       tracks: db.prepare(`
-        SELECT id, title, artist_name, album_name, album_id, duration, lossless
+        SELECT id, title, artist_name, album_name, album_id, duration, lossless,
+               transcodable(path) AS transcodable
         FROM tracks
         WHERE title LIKE ? OR artist_name LIKE ? OR album_name LIKE ?
         LIMIT 30

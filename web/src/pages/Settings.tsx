@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../api';
 import { PlusIcon, RefreshIcon, TrashIcon } from '../components/icons';
 import { useAuth } from '../store/auth';
+import { usePlayer, type Quality } from '../store/player';
 import type { Role } from '../api/types';
 
 const SparkleIcon = () => (
@@ -25,6 +26,7 @@ export function SettingsPage() {
           <div className="text-[12px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-fg-mute)' }}>偏好</div>
           <h1 className="text-[28px] font-semibold mt-1">设置</h1>
         </div>
+        <QualitySection />
         <PasswordSection />
         <div className="mt-8 text-[12px] leading-relaxed" style={{ color: 'var(--color-fg-mute)' }}>
           仅管理员可以管理音乐库目录、扫描和元数据刮削。
@@ -167,12 +169,65 @@ export function SettingsPage() {
 
       <UsersSection />
 
+      <QualitySection />
+
       <PasswordSection />
 
       <div className="mt-8 text-[12px] leading-relaxed" style={{ color: 'var(--color-fg-mute)' }}>
         支持的格式：FLAC · ALAC (M4A) · WAV · AIFF · MP3 · OGG · OPUS · APE · WavPack · DSD · DSF · DFF。
         浏览器原生可播 FLAC / ALAC / WAV / MP3 / OGG。APE / DSD 当前以原始字节流送出，需要客户端或后续转码支持。
       </div>
+    </div>
+  );
+}
+
+const QUALITY_OPTIONS: Array<{ value: Quality; label: string; desc: string; needsFfmpeg?: boolean }> = [
+  { value: 'auto', label: '自动（推荐）', desc: '根据网络状况自动选择音质' },
+  { value: 'lossless', label: '原始无损', desc: '始终播放原始文件，流量最大' },
+  { value: 'aac256', label: '高品质 AAC 256kbps', desc: '接近无损的听感，流量更小', needsFfmpeg: true },
+  { value: 'aac128', label: '省流 AAC 128kbps', desc: '移动网络下最省流量', needsFfmpeg: true }
+];
+
+function QualitySection() {
+  const quality = usePlayer(s => s.quality);
+  const setQuality = usePlayer(s => s.setQuality);
+  const { data: config } = useQuery({ queryKey: ['config'], queryFn: api.getConfig });
+  // Optimistic while config loads so the AAC options don't flash disabled.
+  const transcoding = config?.transcoding !== false;
+
+  return (
+    <div className="rounded-2xl bg-white/[0.025] border border-white/5 p-4 md:p-6 mt-6">
+      <div className="mb-4">
+        <div className="text-[15px] font-semibold">音质</div>
+        <div className="text-[12px] mt-0.5" style={{ color: 'var(--color-fg-soft)' }}>
+          选择串流音质，切换后从下一首开始生效。移动网络卡顿时建议选 AAC。
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {QUALITY_OPTIONS.map(o => {
+          const disabled = !!o.needsFfmpeg && !transcoding;
+          const selected = quality === o.value;
+          return (
+            <button
+              key={o.value}
+              disabled={disabled}
+              onClick={() => setQuality(o.value)}
+              aria-pressed={selected}
+              className={`text-left px-3 py-2.5 rounded-lg border transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                selected ? 'border-white/40 bg-white/[0.06]' : 'border-white/10 hover:bg-white/[0.04]'
+              }`}
+            >
+              <div className="text-[13px] font-medium">{o.label}</div>
+              <div className="text-[11px] mt-0.5" style={{ color: 'var(--color-fg-mute)' }}>{o.desc}</div>
+            </button>
+          );
+        })}
+      </div>
+      {config && !config.transcoding && (
+        <div className="text-[12px] mt-3" style={{ color: 'var(--color-fg-mute)' }}>
+          服务器未安装 ffmpeg，转码不可用（将始终播放原始文件）。
+        </div>
+      )}
     </div>
   );
 }

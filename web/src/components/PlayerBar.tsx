@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { coverUrl } from '../api';
 import { usePlayer } from '../store/player';
 import { useUI } from '../store/ui';
-import { fmtDuration, qualityLabel } from '../lib/format';
+import { qualityLabel } from '../lib/format';
 import { Cover } from './Cover';
+import { SeekBar, ProgressStrip } from './SeekBar';
 import {
   PlayIcon, PauseIcon, PrevIcon, NextIcon,
   ShuffleIcon, RepeatIcon, RepeatOneIcon,
@@ -16,8 +18,6 @@ export function PlayerBar() {
   const queue = usePlayer(s => s.queue);
   const index = usePlayer(s => s.index);
   const isPlaying = usePlayer(s => s.isPlaying);
-  const currentTime = usePlayer(s => s.currentTime);
-  const duration = usePlayer(s => s.duration);
   const volume = usePlayer(s => s.volume);
   const muted = usePlayer(s => s.muted);
   const repeat = usePlayer(s => s.repeat);
@@ -25,7 +25,6 @@ export function PlayerBar() {
   const toggle = usePlayer(s => s.toggle);
   const next = usePlayer(s => s.next);
   const prev = usePlayer(s => s.prev);
-  const seek = usePlayer(s => s.seek);
   const setVolume = usePlayer(s => s.setVolume);
   const toggleMute = usePlayer(s => s.toggleMute);
   const cycleRepeat = usePlayer(s => s.cycleRepeat);
@@ -35,24 +34,27 @@ export function PlayerBar() {
   const toggleQueue = useUI(s => s.toggleQueue);
 
   const track = queue[index];
-  const [isFavorited, setFavorited] = useState(false);
 
-  useEffect(() => {
-    if (!track) return;
-    let cancelled = false;
-    api.favoriteIds().then(ids => { if (!cancelled) setFavorited(ids.includes(track.id)); });
-    return () => { cancelled = true; };
-  }, [track?.id]);
+  // Shared with NowPlaying via the ['favoriteIds'] cache — one fetch instead
+  // of one per component per track change.
+  const qc = useQueryClient();
+  const { data: favoriteIds } = useQuery({
+    queryKey: ['favoriteIds'],
+    queryFn: api.favoriteIds,
+    staleTime: 60_000,
+    enabled: !!track
+  });
+  const isFavorited = !!track && !!favoriteIds?.includes(track.id);
 
   useEffect(() => {
     if (!track) return;
     if ('mediaSession' in navigator) {
-      const url = track.album_id ? coverUrl(track.album_id, true) : '';
+      const url = track.album_id ? coverUrl(track.album_id, true, 320) : '';
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title,
         artist: track.artist_name,
         album: track.album_name,
-        artwork: url ? [{ src: url, sizes: '512x512' }] : []
+        artwork: url ? [{ src: url, sizes: '320x320' }] : []
       });
       navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     }
@@ -69,7 +71,15 @@ export function PlayerBar() {
     );
   }
 
-  const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const toggleFavorite = async () => {
+    const id = track.id;
+    if (isFavorited) await api.removeFavorite(id);
+    else await api.addFavorite(id);
+    qc.setQueryData<number[]>(['favoriteIds'], ids =>
+      isFavorited ? (ids ?? []).filter(x => x !== id) : [...(ids ?? []), id]
+    );
+    qc.invalidateQueries({ queryKey: ['favorites'] });
+  };
 
   return (
     <div
@@ -77,9 +87,7 @@ export function PlayerBar() {
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {/* Mobile thin progress bar at the very top of the player bar. */}
-      <div className="md:hidden h-[2px] bg-white/[0.05]">
-        <div className="h-full bg-white/80 transition-[width] duration-150" style={{ width: `${pct}%` }} />
-      </div>
+      <ProgressStrip className="md:hidden" />
 
       {/* Mobile compact bar */}
       <div className="md:hidden flex items-center gap-3 px-3 py-2 min-h-[64px]">
@@ -88,7 +96,7 @@ export function PlayerBar() {
           onClick={() => setNowPlaying(true)}
           aria-label="打开正在播放"
         >
-          <Cover albumId={track.album_id} hasCover={true} className="w-12 h-12 shrink-0" rounded="rounded-md" />
+          <Cover albumId={track.album_id} hasCover={true} size={96} className="w-12 h-12 shrink-0" rounded="rounded-md" />
           <div className="min-w-0">
             <div className="text-[14px] font-medium truncate">{track.title}</div>
             <div className="text-[12px] truncate" style={{ color: 'var(--color-fg-soft)' }}>{track.artist_name}</div>
@@ -98,10 +106,7 @@ export function PlayerBar() {
           className="btn-icon w-10 h-10 shrink-0"
           data-active={isFavorited}
           aria-label={isFavorited ? '取消收藏' : '收藏'}
-          onClick={async () => {
-            if (isFavorited) { await api.removeFavorite(track.id); setFavorited(false); }
-            else { await api.addFavorite(track.id); setFavorited(true); }
-          }}
+          onClick={toggleFavorite}
         >
           <HeartIcon filled={isFavorited} width={18} height={18} />
         </button>
@@ -129,7 +134,7 @@ export function PlayerBar() {
             onClick={() => setNowPlaying(true)}
             aria-label="打开正在播放"
           >
-            <Cover albumId={track.album_id} hasCover={true} className="w-14 h-14" />
+            <Cover albumId={track.album_id} hasCover={true} size={96} className="w-14 h-14" />
             <span className="absolute inset-0 grid place-items-center bg-black/40 opacity-0 group-hover:opacity-100 transition rounded-[10px]">
               <ChevronDown width={20} height={20} style={{ transform: 'rotate(180deg)' }} />
             </span>
@@ -142,15 +147,7 @@ export function PlayerBar() {
             className="btn-icon w-8 h-8 shrink-0"
             data-active={isFavorited}
             aria-label={isFavorited ? '取消收藏' : '收藏'}
-            onClick={async () => {
-              if (isFavorited) {
-                await api.removeFavorite(track.id);
-                setFavorited(false);
-              } else {
-                await api.addFavorite(track.id);
-                setFavorited(true);
-              }
-            }}
+            onClick={toggleFavorite}
           >
             <HeartIcon filled={isFavorited} width={16} height={16} />
           </button>
@@ -189,20 +186,7 @@ export function PlayerBar() {
               {repeat === 'one' ? <RepeatOneIcon width={16} height={16} /> : <RepeatIcon width={16} height={16} />}
             </button>
           </div>
-          <div className="flex items-center gap-2 w-full max-w-[640px]">
-            <span className="text-[11px] tabular-nums" style={{ color: 'var(--color-fg-mute)' }}>{fmtDuration(currentTime)}</span>
-            <input
-              type="range"
-              className="range-slim flex-1"
-              min={0}
-              max={duration || 0}
-              step={0.1}
-              value={currentTime}
-              onChange={e => seek(Number(e.target.value))}
-              style={{ ['--progress' as any]: `${pct}%` }}
-            />
-            <span className="text-[11px] tabular-nums" style={{ color: 'var(--color-fg-mute)' }}>{fmtDuration(duration)}</span>
-          </div>
+          <SeekBar className="gap-2 w-full max-w-[640px]" />
         </div>
 
         <div className="flex items-center gap-2 w-[300px] justify-end">

@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import compress from '@fastify/compress';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
@@ -30,6 +31,15 @@ app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body,
 
 await app.register(cors, { origin: true, credentials: true });
 await app.register(cookie);
+// Compress JSON/text payloads only. Audio (audio/*) and cover (image/*)
+// streams are already-encoded bytes and must pass through untouched —
+// customTypes replaces the default type regex, and neither audio nor image
+// types are compressible per mime-db, so they never hit the encoder.
+await app.register(compress, {
+  global: true,
+  encodings: ['br', 'gzip'],
+  customTypes: /^application\/json(?:;|$)|^text\//
+});
 
 // Endpoints that require admin role. Listeners get 403 here.
 const ADMIN_PREFIXES = ['/api/scan', '/api/enrich', '/api/users'];
@@ -76,7 +86,23 @@ await app.register(enrichRoutes);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const webDist = resolve(__dirname, '..', '..', 'web', 'dist');
 if (existsSync(webDist)) {
-  await app.register(fastifyStatic, { root: webDist, prefix: '/', wildcard: false });
+  await app.register(fastifyStatic, {
+    root: webDist,
+    prefix: '/',
+    wildcard: false,
+    // Without this the plugin emits its own Cache-Control (max-age=0) via
+    // reply headers, which override anything setHeaders puts on the raw res.
+    cacheControl: false,
+    setHeaders: (res, filePath) => {
+      // Vite content-hashes everything under assets/ — cache forever.
+      // index.html (also the SPA notFound fallback below) must revalidate on
+      // every load so new deploys land immediately.
+      res.setHeader(
+        'Cache-Control',
+        filePath.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'
+      );
+    }
+  });
   app.setNotFoundHandler((req, reply) => {
     if (req.url.startsWith('/api')) return reply.code(404).send({ error: 'Not found' });
     reply.sendFile('index.html');

@@ -74,6 +74,15 @@
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.06);
 }
+/* Mobile: backdrop-filter re-filters everything scrolling underneath the
+   fixed bars on every frame — swap for an opaque surface there. */
+@media (max-width: 768px) {
+  .glass {
+    background: rgba(12, 12, 18, 0.92);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
 
 /* Cover with subtle gradient overlay for legibility */
 .cover-wrap {
@@ -94,19 +103,26 @@
 }
 .cover-wrap:hover::after { opacity: 1; }
 
-.cover-shimmer {
-  background: linear-gradient(
-    100deg,
-    var(--color-surface) 30%,
-    var(--color-surface-hi) 50%,
-    var(--color-surface) 70%
-  );
-  background-size: 200% 100%;
+/* Skeleton shimmer: transform-only sweep so it stays on the compositor
+   (a background-position animation repaints every frame). Positioning lives
+   in the components layer so utility classes (e.g. `absolute`) still win. */
+@layer components {
+  .cover-shimmer {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-surface);
+  }
+}
+.cover-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, var(--color-surface-hi) 50%, transparent 70%);
+  transform: translateX(-100%);
   animation: shimmer 1.6s ease-in-out infinite;
 }
 @keyframes shimmer {
-  0% { background-position: 100% 0; }
-  100% { background-position: 0 0; }
+  to { transform: translateX(100%); }
 }
 
 /* Vinyl record rotation */
@@ -115,15 +131,20 @@
   to { transform: rotate(360deg); }
 }
 
-.spin-slow { animation: spin-vinyl 22s linear infinite; }
-
 /* Soft animated gradient background for now playing */
 @keyframes drift {
   0% { transform: translate3d(-2%, -1%, 0) scale(1.05); }
   50% { transform: translate3d(2%, 1%, 0) scale(1.1); }
   100% { transform: translate3d(-2%, -1%, 0) scale(1.05); }
 }
-.drift { animation: drift 22s ease-in-out infinite; }
+
+/* Infinite decorative animations run on desktop pointers only — full-viewport
+   transforms drain mobile batteries, and reduced-motion users opt out too.
+   Mobile / reduced-motion keeps the static styled element. */
+@media (prefers-reduced-motion: no-preference) and (min-width: 769px) {
+  .spin-slow { animation: spin-vinyl 22s linear infinite; }
+  .drift { animation: drift 22s ease-in-out infinite; }
+}
 
 /* Range slider re-skin */
 input[type="range"].range-slim {
@@ -185,6 +206,12 @@ input[type="range"].range-slim:active::-moz-range-thumb { opacity: 1; }
 /* Track-row hover row chrome */
 .row-hover { transition: background-color 0.18s ease; }
 .row-hover:hover { background: rgba(255,255,255,0.04); }
+
+/* Offscreen list rows skip layout + paint entirely. */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 56px;
+}
 
 /* Equalizer animated bars (now-playing indicator) */
 .eq {

@@ -21,6 +21,15 @@ export const SUPPORTED_EXTENSIONS = new Set([
   '.dsf', '.dff'
 ]);
 
+// Lossless formats worth transcoding down for cellular. .m4a is deliberately
+// excluded — it may be ALAC (lossless) or already-lossy AAC, and re-encoding
+// the latter would only degrade it. The client learns per-track
+// transcodability via the `transcodable` field in track payloads, so this
+// set must stay the single source of truth for the stream route's branch.
+export const TRANSCODABLE_EXTENSIONS = new Set([
+  '.flac', '.wav', '.alac', '.aif', '.aiff', '.ape', '.wv', '.dsf', '.dff'
+]);
+
 export const LOSSLESS_CODECS = new Set([
   'FLAC', 'ALAC', 'WAV', 'PCM', 'AIFF', 'APE',
   'MONKEY', "MONKEY'S AUDIO",

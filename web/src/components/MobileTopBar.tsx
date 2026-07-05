@@ -1,5 +1,4 @@
 import { useLocation, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { useUI } from '../store/ui';
 import { MenuIcon } from './icons';
 
@@ -39,14 +38,15 @@ export function MobileTopBar() {
         <MenuIcon width={20} height={20} />
       </button>
       <Link to="/" className="flex items-center gap-2 select-none">
-        <motion.div
-          className="w-6 h-6 rounded-full"
+        {/* CSS spin instead of framer-motion: the old infinite `animate` ran a
+            rAF loop on every mobile frame. `.spin-slow` is desktop-only, so
+            this bar (mobile-only) shows a static logo — deliberately. */}
+        <div
+          className="w-6 h-6 rounded-full spin-slow"
           style={{
             background: 'conic-gradient(from 90deg, #c7a8ff, #ff8ec7, #ffd596, #c7a8ff)',
             boxShadow: '0 0 14px rgba(199, 168, 255, 0.45)'
           }}
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 16, ease: 'linear' }}
         />
         <span className="text-[14px] font-semibold tracking-tight">{title}</span>
       </Link>

@@ -5,12 +5,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App';
 import './styles.css';
 
+// Library data only changes on scan — cache aggressively, never refetch on
+// focus/reconnect (cellular reconnects mid-drive would refetch everything).
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
-      gcTime: 5 * 60_000,
-      refetchOnWindowFocus: false
+      staleTime: 5 * 60_000,
+      gcTime: 30 * 60_000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      retry: 1
     }
   }
 });

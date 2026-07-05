@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Component, lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sidebar } from './components/Sidebar';
@@ -14,12 +14,42 @@ import { ArtistPage } from './pages/Artist';
 import { SearchPage } from './pages/Search';
 import { FavoritesPage } from './pages/Favorites';
 import { PlaylistsPage, PlaylistDetailPage } from './pages/Playlists';
-import { SettingsPage } from './pages/Settings';
-import { LoginPage } from './pages/Login';
 import { useAuth } from './store/auth';
 import { api, setUnauthorizedHandler } from './api';
 import { audio, usePlayer } from './store/player';
 import { useUI } from './store/ui';
+
+// Settings (admin-heavy) and Login rarely sit on the hot path — split them
+// out of the main bundle and load on demand.
+const SettingsPage = lazy(() => import('./pages/Settings').then(m => ({ default: m.SettingsPage })));
+const LoginPage = lazy(() => import('./pages/Login').then(m => ({ default: m.LoginPage })));
+
+// A lazy chunk that fails to load (deploy replaced hashed assets, flaky
+// network) throws during render — without a boundary that unmounts the whole
+// app. Reloading fetches the current index.html and heals it.
+class ChunkBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="h-full grid place-items-center" style={{ background: 'var(--color-bg)' }}>
+        <div className="text-center space-y-3">
+          <p className="text-sm" style={{ color: 'var(--color-fg-soft)' }}>页面加载失败，可能是网络问题或版本已更新</p>
+          <button
+            className="px-4 py-2 rounded-full text-sm"
+            style={{ background: 'var(--color-surface-hi)', color: 'var(--color-fg)' }}
+            onClick={() => window.location.reload()}
+          >
+            重新加载
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
 
 export function App() {
   const phase = useAuth(s => s.phase);
@@ -98,7 +128,23 @@ export function App() {
       </div>
     );
   }
-  if (phase === 'setup' || phase === 'login') return <LoginPage />;
+  if (phase === 'setup' || phase === 'login') {
+    return (
+      <ChunkBoundary>
+        {/* Keep the bootstrap shimmer up while the Login chunk downloads —
+            a null fallback would flash a blank page on slow networks. */}
+        <Suspense
+          fallback={
+            <div className="h-full grid place-items-center" style={{ background: 'var(--color-bg)' }}>
+              <div className="cover-shimmer w-12 h-12 rounded-full" />
+            </div>
+          }
+        >
+          <LoginPage />
+        </Suspense>
+      </ChunkBoundary>
+    );
+  }
   return <Shell />;
 }
 
@@ -118,18 +164,24 @@ function Shell() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
             >
-              <Routes location={location}>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/albums" element={<AlbumsPage />} />
-                <Route path="/albums/:id" element={<AlbumPage />} />
-                <Route path="/artists" element={<ArtistsPage />} />
-                <Route path="/artists/:id" element={<ArtistPage />} />
-                <Route path="/search" element={<SearchPage />} />
-                <Route path="/favorites" element={<FavoritesPage />} />
-                <Route path="/playlists" element={<PlaylistsPage />} />
-                <Route path="/playlists/:id" element={<PlaylistDetailPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-              </Routes>
+              {/* Suspense INSIDE the motion wrapper so AnimatePresence exit
+                  animations still see a mounted direct child. */}
+              <Suspense fallback={null}>
+                <ChunkBoundary>
+                <Routes location={location}>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/albums" element={<AlbumsPage />} />
+                  <Route path="/albums/:id" element={<AlbumPage />} />
+                  <Route path="/artists" element={<ArtistsPage />} />
+                  <Route path="/artists/:id" element={<ArtistPage />} />
+                  <Route path="/search" element={<SearchPage />} />
+                  <Route path="/favorites" element={<FavoritesPage />} />
+                  <Route path="/playlists" element={<PlaylistsPage />} />
+                  <Route path="/playlists/:id" element={<PlaylistDetailPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Routes>
+                </ChunkBoundary>
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </main>

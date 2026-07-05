@@ -49,6 +49,9 @@ export interface Track {
   bit_depth: number | null;
   channels: number | null;
   file_size: number | null;
+  // 1 when the server's stream route can transcode this file (lossless
+  // source formats only). Missing/0 → the client must request raw bytes.
+  transcodable?: number | boolean | null;
 }
 
 export interface SearchResult {

@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
-import { COVERS_DIR, DATA_DIR, DB_PATH } from './config.js';
+import { extname } from 'node:path';
+import { COVERS_DIR, DATA_DIR, DB_PATH, TRANSCODABLE_EXTENSIONS } from './config.js';
 
 mkdirSync(DATA_DIR, { recursive: true });
 mkdirSync(COVERS_DIR, { recursive: true });
@@ -9,6 +10,13 @@ export const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 db.pragma('synchronous = NORMAL');
+
+// SQL helper so track SELECTs can report whether the stream route would
+// transcode this file — the client must never guess (its guess and the
+// server's extension check drifting apart breaks seeking on lossy files).
+db.function('transcodable', { deterministic: true }, (path: unknown) =>
+  typeof path === 'string' && TRANSCODABLE_EXTENSIONS.has(extname(path).toLowerCase()) ? 1 : 0
+);
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS library_dirs (

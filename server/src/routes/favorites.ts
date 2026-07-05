@@ -5,7 +5,8 @@ export const favoriteRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/favorites', async () => {
     return db.prepare(`
       SELECT t.id, t.title, t.artist_name, t.album_name, t.album_id,
-             t.duration, t.lossless, f.added_at
+             t.duration, t.lossless, f.added_at,
+             transcodable(t.path) AS transcodable
       FROM favorites f JOIN tracks t ON t.id = f.track_id
       ORDER BY f.added_at DESC
     `).all();

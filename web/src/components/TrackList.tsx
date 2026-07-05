@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import type { Track } from '../api/types';
 import { fmtDuration, qualityLabel } from '../lib/format';
 import { usePlayer } from '../store/player';
 import { useAuth } from '../store/auth';
 import { PlayIcon } from './icons';
 import { EqBars } from './EqBars';
-import { EnrichDialog } from './EnrichDialog';
+
+// Admin-only dialog — split out of the main bundle, fetched on first use.
+const EnrichDialog = lazy(() => import('./EnrichDialog').then(m => ({ default: m.EnrichDialog })));
 
 interface Props {
   tracks: Track[];
@@ -20,11 +22,89 @@ const SPARKLE = (
   </svg>
 );
 
+interface RowProps {
+  track: Track;
+  index: number;
+  active: boolean;
+  showAlbum?: boolean;
+  numberByIndex?: boolean;
+  isAdmin: boolean;
+  mobileCols: string;
+  desktopCols: string;
+  onPlay: (index: number) => void;
+  onEnrich: (trackId: number) => void;
+}
+
+// Memo'd so a track change only re-renders the two rows whose `active` flag
+// flips — never the whole list.
+const TrackRow = memo(function TrackRow({
+  track: t, index: i, active, showAlbum, numberByIndex, isAdmin, mobileCols, desktopCols, onPlay, onEnrich
+}: RowProps) {
+  return (
+    <div
+      className={`grid ${mobileCols} ${desktopCols} gap-2 md:gap-3 px-2 md:px-3 py-2 row-hover rounded-md group cursor-pointer items-center cv-auto`}
+      onDoubleClick={() => onPlay(i)}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest('button, a')) return;
+        onPlay(i);
+      }}
+    >
+      <div className="text-right tabular-nums relative" style={{ color: active ? 'var(--color-accent)' : 'var(--color-fg-mute)' }}>
+        <span className="md:group-hover:hidden">
+          {active ? (
+            <EqBars className="ml-auto" color="var(--color-accent)" height={12} bands={4} />
+          ) : (
+            numberByIndex ? i + 1 : (t.track_no ?? i + 1)
+          )}
+        </span>
+        <button
+          className="hidden md:group-hover:inline-flex w-6 h-6 items-center justify-center rounded-full text-white"
+          onClick={(e) => { e.stopPropagation(); onPlay(i); }}
+          aria-label="播放"
+        >
+          <PlayIcon width={14} height={14} />
+        </button>
+      </div>
+      <div className="min-w-0">
+        <div className={`truncate ${active ? 'text-[var(--color-accent)]' : ''}`}>{t.title}</div>
+        <div className="text-[12px] truncate" style={{ color: 'var(--color-fg-soft)' }}>
+          {t.artist_name}
+          {/* Album name folded into the subtitle on mobile when showAlbum is requested */}
+          {showAlbum && <span className="md:hidden"> · {t.album_name}</span>}
+        </div>
+      </div>
+      {showAlbum && (
+        <div className="hidden md:block text-[12px] truncate" style={{ color: 'var(--color-fg-soft)' }}>{t.album_name}</div>
+      )}
+      <div className="hidden md:block text-[11px]" style={{ color: 'var(--color-fg-soft)' }}>
+        {qualityLabel({ lossless: t.lossless, codec: t.codec, bitrate: t.bitrate, bit_depth: t.bit_depth, sample_rate: t.sample_rate })}
+      </div>
+      <div className="text-[11px] md:text-[12px] tabular-nums text-right md:text-left" style={{ color: 'var(--color-fg-soft)' }}>{fmtDuration(t.duration ?? 0)}</div>
+      {isAdmin && (
+        <button
+          className="btn-icon w-7 h-7 opacity-60 md:opacity-50 hover:opacity-100"
+          onClick={(e) => { e.stopPropagation(); onEnrich(t.id); }}
+          aria-label="刮削此曲"
+          title="刮削此曲：从 MusicBrainz / 网易云查找候选"
+        >
+          {SPARKLE}
+        </button>
+      )}
+    </div>
+  );
+});
+
 export function TrackList({ tracks, showAlbum, numberByIndex }: Props) {
   const playQueue = usePlayer(s => s.playQueue);
   const currentTrackId = usePlayer(s => s.queue[s.index]?.id);
   const isAdmin = useAuth(s => s.user?.role === 'admin');
   const [enrichingId, setEnrichingId] = useState<number | null>(null);
+  // Dialog chunk loads on first use, then stays mounted so its close
+  // animation keeps working.
+  const [enrichMounted, setEnrichMounted] = useState(false);
+
+  const onPlay = useCallback((i: number) => playQueue(tracks, i), [playQueue, tracks]);
+  const onEnrich = useCallback((id: number) => { setEnrichMounted(true); setEnrichingId(id); }, []);
 
   // Two grid templates: one tight for mobile (no quality / album columns),
   // one full for >=md. Listeners drop the trailing scrape column entirely.
@@ -53,64 +133,27 @@ export function TrackList({ tracks, showAlbum, numberByIndex }: Props) {
           <span>时长</span>
           {isAdmin && <span />}
         </div>
-        {tracks.map((t, i) => {
-          const active = t.id === currentTrackId;
-          return (
-            <div
-              key={t.id}
-              className={`grid ${mobileCols} ${desktopCols} gap-2 md:gap-3 px-2 md:px-3 py-2 row-hover rounded-md group cursor-pointer items-center`}
-              onDoubleClick={() => playQueue(tracks, i)}
-              onClick={(e) => {
-                if ((e.target as HTMLElement).closest('button, a')) return;
-                playQueue(tracks, i);
-              }}
-            >
-              <div className="text-right tabular-nums relative" style={{ color: active ? 'var(--color-accent)' : 'var(--color-fg-mute)' }}>
-                <span className="md:group-hover:hidden">
-                  {active ? (
-                    <EqBars className="ml-auto" color="var(--color-accent)" height={12} bands={4} />
-                  ) : (
-                    numberByIndex ? i + 1 : (t.track_no ?? i + 1)
-                  )}
-                </span>
-                <button
-                  className="hidden md:group-hover:inline-flex w-6 h-6 items-center justify-center rounded-full text-white"
-                  onClick={(e) => { e.stopPropagation(); playQueue(tracks, i); }}
-                  aria-label="播放"
-                >
-                  <PlayIcon width={14} height={14} />
-                </button>
-              </div>
-              <div className="min-w-0">
-                <div className={`truncate ${active ? 'text-[var(--color-accent)]' : ''}`}>{t.title}</div>
-                <div className="text-[12px] truncate" style={{ color: 'var(--color-fg-soft)' }}>
-                  {t.artist_name}
-                  {/* Album name folded into the subtitle on mobile when showAlbum is requested */}
-                  {showAlbum && <span className="md:hidden"> · {t.album_name}</span>}
-                </div>
-              </div>
-              {showAlbum && (
-                <div className="hidden md:block text-[12px] truncate" style={{ color: 'var(--color-fg-soft)' }}>{t.album_name}</div>
-              )}
-              <div className="hidden md:block text-[11px]" style={{ color: 'var(--color-fg-soft)' }}>
-                {qualityLabel({ lossless: t.lossless, codec: t.codec, bitrate: t.bitrate, bit_depth: t.bit_depth, sample_rate: t.sample_rate })}
-              </div>
-              <div className="text-[11px] md:text-[12px] tabular-nums text-right md:text-left" style={{ color: 'var(--color-fg-soft)' }}>{fmtDuration(t.duration ?? 0)}</div>
-              {isAdmin && (
-                <button
-                  className="btn-icon w-7 h-7 opacity-60 md:opacity-50 hover:opacity-100"
-                  onClick={(e) => { e.stopPropagation(); setEnrichingId(t.id); }}
-                  aria-label="刮削此曲"
-                  title="刮削此曲：从 MusicBrainz / 网易云查找候选"
-                >
-                  {SPARKLE}
-                </button>
-              )}
-            </div>
-          );
-        })}
+        {tracks.map((t, i) => (
+          <TrackRow
+            key={t.id}
+            track={t}
+            index={i}
+            active={t.id === currentTrackId}
+            showAlbum={showAlbum}
+            numberByIndex={numberByIndex}
+            isAdmin={isAdmin}
+            mobileCols={mobileCols}
+            desktopCols={desktopCols}
+            onPlay={onPlay}
+            onEnrich={onEnrich}
+          />
+        ))}
       </div>
-      {isAdmin && <EnrichDialog trackId={enrichingId} onClose={() => setEnrichingId(null)} />}
+      {isAdmin && enrichMounted && (
+        <Suspense fallback={null}>
+          <EnrichDialog trackId={enrichingId} onClose={() => setEnrichingId(null)} />
+        </Suspense>
+      )}
     </>
   );
 }
