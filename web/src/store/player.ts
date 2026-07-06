@@ -339,7 +339,9 @@ export const usePlayer = create<PlayerState>()(
       muted: false,
       repeat: 'off',
       shuffle: false,
-      quality: 'auto',
+      // Lossless by default — audio quality is never silently degraded.
+      // AAC transcoding is strictly opt-in via Settings.
+      quality: 'lossless',
       shuffleOrder: [],
       shuffleCursor: 0,
 
@@ -729,6 +731,10 @@ export function effectiveQuality(track?: Track | null): EffectiveQuality {
   const pref = usePlayer.getState().quality;
   if (pref === 'lossless' || serverTranscoding !== true) return 'lossless';
   if (pref === 'aac256' || pref === 'aac128') return pref;
-  // 'auto': cellular-friendly AAC on mobile, full quality on desktop.
-  return isMobile ? 'aac256' : 'lossless';
+  // 'auto': never silently downgrade — stay lossless unless the device's own
+  // OS data-saver is switched on (an explicit "I want less data" signal from
+  // the user), in which case fall back to high-bitrate AAC.
+  const saveData = typeof navigator !== 'undefined'
+    && (navigator as any).connection?.saveData === true;
+  return saveData ? 'aac256' : 'lossless';
 }

@@ -182,10 +182,10 @@ export function SettingsPage() {
 }
 
 const QUALITY_OPTIONS: Array<{ value: Quality; label: string; desc: string; needsFfmpeg?: boolean }> = [
-  { value: 'auto', label: '自动（推荐）', desc: '根据网络状况自动选择音质' },
-  { value: 'lossless', label: '原始无损', desc: '始终播放原始文件，流量最大' },
-  { value: 'aac256', label: '高品质 AAC 256kbps', desc: '接近无损的听感，流量更小', needsFfmpeg: true },
-  { value: 'aac128', label: '省流 AAC 128kbps', desc: '移动网络下最省流量', needsFfmpeg: true }
+  { value: 'lossless', label: '原始无损（推荐）', desc: '始终播放原始文件，绝不转码' },
+  { value: 'auto', label: '自动', desc: '默认无损，仅系统开启省流时才转 AAC' },
+  { value: 'aac256', label: '高品质 AAC 256kbps', desc: '接近无损的听感，流量约 1/20', needsFfmpeg: true },
+  { value: 'aac128', label: '省流 AAC 128kbps', desc: '弱网 / 车载最省流量', needsFfmpeg: true }
 ];
 
 function QualitySection() {
@@ -200,7 +200,7 @@ function QualitySection() {
       <div className="mb-4">
         <div className="text-[15px] font-semibold">音质</div>
         <div className="text-[12px] mt-0.5" style={{ color: 'var(--color-fg-soft)' }}>
-          选择串流音质，切换后从下一首开始生效。移动网络卡顿时建议选 AAC。
+          默认原始无损，绝不动你的源文件。只有在车上 / 弱网嫌卡时，再手动切到 AAC 省流。切换后从下一首生效。
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
