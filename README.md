@@ -188,6 +188,19 @@ cd server && npm rebuild better-sqlite3
 
 ---
 
+## 忘记管理员 PIN？
+
+在服务器上（能登录主机 shell 即视为身份验证）执行：
+
+```bash
+# 部署包目录下（LUMEN_DATA_DIR 按实际路径调整，默认 ./data）
+LUMEN_DATA_DIR=./data node server/dist/tools/reset-admin.js 654321
+```
+
+会把**第一个管理员**的 PIN 重置为给定的 6 位数字，并注销该管理员所有设备上的登录会话（听众账号不受影响）。之后可在「设置」里再改成别的。
+
+---
+
 ## 已知限制
 
 - MB API 限速 1 r/s 是硬限制，整库刮削大库 (1k+ 曲目) 需要数分钟
